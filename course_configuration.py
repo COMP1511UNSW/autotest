@@ -7,13 +7,13 @@ course_forum_url = 'https://piazza.com/class/j5ji4vjjra62a3'
 lecture_recordings_url = 'https://moodle.telt.unsw.edu.au/course/view.php?id=27708'
 
 # these values are only used if they can't be extracted from sys.argv[0]
-base_dir = '/web/cs2041'
-course_account = 'cs2041'
-unsw_session = '17s2'
+base_dir = '/web/cs1511'
+course_account = 'cs1511'
+unsw_session = '19T1'
 
 full_pathname =  os.path.realpath(sys.argv[0])
 dir = os.path.dirname(full_pathname)
-m = re.search(r'^(.*\b([a-z][a-z]\d{4})(cgi)?\b.*\b(\d\d[sx][12])\b).*', dir)
+m = re.search(r'^(.*\b([a-z][a-z]\d{4})(cgi)?\b.*\b(\d\d[scxT]\d)\b).*', dir)
 if m:
     (base_dir, course_account, unsw_session) = (m.group(1), m.group(2),  m.group(4))
 else:

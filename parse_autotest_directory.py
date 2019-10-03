@@ -91,7 +91,7 @@ def fetch_tests_from_autotest_directory(autotest_dir, tests_filename='tests.txt'
 				sys.exit(1)
 			lines = p.stdout.splitlines()
 		for (line_number, line) in enumerate(lines):
-			if line.count('\t') > 1:
+			if line.count('\t') > 1 and 'command=' not in line:
 				t = parse_old_test_description(line, autotest_dir, debug=debug)
 			else:
 				t = parse_test_line(autotest_dir, filename, line_number, line, debug, global_variables)
@@ -286,6 +286,7 @@ if __name__ == '__main__':
 	for file in glob.glob('*.expected_stdout') + glob.glob('*.expected_stderr'):
 		os.unlink(file)
 	unlink_files = []
+	last_compiler_args = None
 	try:
 		for test in tests.values():
 			unlink_files.append('samp' + test.label)
@@ -314,13 +315,31 @@ if __name__ == '__main__':
 								shutil.copymode(path, b)
 								unlink_files.append(b)
 								break
-				first_test_file = test.files[0]
-				if first_test_file.endswith('.h') or first_test_file.endswith('.c'):
-					compiler_args = interpolate_backquotes(test.parameters.get('compiler_args', test.files + ['-o', test.program]))
-					command = ['dcc'] + make_list(compiler_args)
-					print(" ".join(command))
-					subprocess.check_call(command)
-					unlink_files.append(test.program)
+					for test_file in glob.glob(file):
+						basename, extension = os.path.splitext(test_file)
+						if extension in ['.c', '.h']:
+							compiler_args = interpolate_backquotes(test.parameters.get('compiler_args', test.files + ['-o', test.program]))
+
+							if not os.path.exists(test.program) or last_compiler_args != compiler_args:
+								last_compiler_args = compiler_args
+								command = ['dcc'] + make_list(compiler_args)
+								print(" ".join(command))
+								subprocess.check_call(command)
+								unlink_files.append(test.program)
+						elif extension in ['.pl', '.py', '.sh']:
+							if not os.path.exists(basename):
+								os.link(test_file, basename)
+								unlink_files.append(basename)
+						elif extension == '.java':
+							if not os.path.exists(basename):
+								open(basename,"w").write("#!/bin/bash\njava %s $@" % basename)
+								os.chmod(basename, 0o700)
+								unlink_files.append(basename)
+						elif extension == '.js':
+							if not os.path.exists(basename):
+								open(basename,"w").write("#!/bin/bash\nnode %s $@" % test_file)
+								os.chmod(basename, 0o700)
+								unlink_files.append(basename)
 
 			# fake expected results
 			test.parameters.setdefault('max_stdout_bytes', 100000000)

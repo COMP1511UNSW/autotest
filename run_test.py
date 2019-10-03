@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import codecs, locale, os, re, shlex, subprocess, time
+import codecs, os, re, shlex, subprocess, time
 from subprocess_with_resource_limits import run
 from explain_output_differences import explain_output_differences, sanitize_string
 from termcolor import colored as termcolor_colored
@@ -9,7 +9,7 @@ class InternalError(Exception):
 	pass
 
 class Test():
-	def __init__(self, autotest_dir, label, program, command, files=None, description=None, stdin=None, stdin_file=None, expected_stdout=None, expected_stdout_file=None, expected_stderr=None, expected_stderr_file=None, ignore_case=False, ignore_white_space=False, ignore_trailing_white_space=True, ignore_blank_lines=False, ignore_characters='', compare_only_characters=None, prediff_filter=None, debug=0, **parameters):
+	def __init__(self, autotest_dir, label, program, command, files=None, description=None, stdin=None, stdin_file=None, expected_stdout=None, expected_stdout_file=None, expected_stderr=None, expected_stderr_file=None, ignore_case=False, ignore_white_space=False, ignore_trailing_white_space=True, ignore_blank_lines=False, ignore_characters='', compare_only_characters='', prediff_filter=None, debug=0, **parameters):
 		self.autotest_dir = autotest_dir
 		self.label = label
 		self.program = program
@@ -30,6 +30,9 @@ class Test():
 		self.ignore_blank_lines = ignore_blank_lines
 		self.ignore_characters = ignore_characters
 		self.ignore_trailing_white_space = ignore_trailing_white_space
+		self.compare_only_characters = compare_only_characters
+		self.ignore_white_space = ignore_white_space
+
 		# ignore all characters but those specified
 		if ignore_white_space:
 			self.ignore_characters += " \t"
@@ -53,6 +56,7 @@ class Test():
 		self.parameters = parameters.copy()
 		self.debug = debug
 		self.test_passed = None
+		self.using_dcc_output_checking = False
 
 	def __str__(self):
 		return "Test(%s, %s, %s)" % (self.label, self.program, self.command)
@@ -80,7 +84,25 @@ class Test():
 		max_stdout_bytes = max(10000, max_stdout_bytes)
 		max_stdout_bytes = max(2 * len(self.expected_stdout), max_stdout_bytes)
 		self.parameters.setdefault('max_stdout_bytes', max_stdout_bytes)
-
+		if (
+			self.is_true('use_dcc_output_checking') or
+			(
+				'use_dcc_output_checking' not in self.parameters and
+				os.environ.get('AUTOTEST_USE_DCC_OUTPUT_CHECKING', '') and
+				not self.expected_stderr and
+				not self.prediff_filter and
+				'compiler_args' not in self.parameters
+			)):
+			os.environ['DCC_EXPECTED_STDOUT'] = self.expected_stdout
+			os.environ['DCC_IGNORE_CASE'] = str(self.ignore_case)
+			os.environ['DCC_COMPARE_ONLY_CHARACTERS'] = str(self.compare_only_characters)
+			os.environ['DCC_IGNORE_CHARACTERS'] = str(self.ignore_characters)
+			os.environ['DCC_IGNORE_TRAILING_WHITE_SPACE'] = str(self.ignore_trailing_white_space)
+			os.environ['DCC_IGNORE_WHITE_SPACE'] = str(self.ignore_white_space)
+			os.environ['DCC_IGNORE_EMPTY_LINES'] = str(self.ignore_blank_lines)
+			os.environ['DCC_MAX_STDOUT_BYTES'] = str(max_stdout_bytes)
+			self.using_dcc_output_checking = True
+			
 		for attempt in range(3):
 			input = None
 			stdin = None
@@ -108,7 +130,10 @@ class Test():
 
 		stdout_short_explanation = self.check_stream(self.stdout, self.expected_stdout, "output")
 		if fail_tests_for_errors or stdout_short_explanation:
-			self.short_explanation = self.check_stream(self.stderr, self.expected_stderr, "stderr")
+			if self.using_dcc_output_checking and 'Execution stopped because' in self.stderr:
+				self.short_explanation = "incorrect output"
+			else:
+				self.short_explanation = self.check_stream(self.stderr, self.expected_stderr, "stderr")
 
 		self.stderr_ok = not self.short_explanation
 
@@ -215,12 +240,16 @@ class Test():
 		if not self.stderr_ok:
 			if self.expected_stderr:
 				self.long_explanation += self.report_difference("stderr", self.expected_stderr, self.stderr, show_expected=show_expected, show_actual=show_actual, show_diff=show_diff)
+			elif self.using_dcc_output_checking and 'Execution stopped because' in self.stderr:
+				self.long_explanation += "Your program produced these %d lines of output before it was terminated:\n" % (len(self.stdout.splitlines()))
+				self.long_explanation += colored(sanitize_string(self.stdout, max_lines_shown=16, max_line_length_shown=256, colorize=colorize), 'cyan')
+				self.long_explanation += self.stderr + "\n"
 			else:
 				errors = sanitize_string(self.stderr, leave_tabs=True, leave_colorization=True, **self.parameters)
 				if '\x1b' not in self.long_explanation:
 					 errors = colored(errors, 'red')
 				if 'Error too much output' in self.stderr:
-					errors += "Your program produced these %d lines of output before it was terminated:\n" % (len(self.stdout))
+					errors += "Your program produced these %d bytes of output before it was terminated:\n" % (len(self.stdout))
 					errors += colored(sanitize_string(self.stdout, max_lines_shown=16, max_line_length_shown=256, colorize=colorize), 'yellow')
 				if self.stdout_ok and self.expected_stdout:
 					self.long_explanation = "Your program's output was correct but errors occurred:\n"
@@ -229,7 +258,7 @@ class Test():
 				else:
 					self.long_explanation = "Your program produced these errors:\n"
 					self.long_explanation += errors
-		if not self.stdout_ok and show_stdout_if_errors or self.stderr_ok:
+		if not self.stdout_ok and (show_stdout_if_errors or self.stderr_ok):
 			bad_characters = self.check_bad_characters(self.stdout, colorize=colorize, expected=self.expected_stdout)
 			if bad_characters:
 				self.long_explanation += bad_characters
@@ -301,6 +330,12 @@ class Test():
 			return explanation
 		return None
 
+	def is_true(self, parameter):
+		if parameter not in self.parameters:
+			return None
+		value = self.parameters[parameter]
+		return value and value[0] not in "0fF"
+		
 def echo_command_for_string(input):
 	options = []
 	if input and input[-1] == '\n':

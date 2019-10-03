@@ -1,11 +1,11 @@
 #!/usr/bin/python3 -I
 
 # try to catch keyboard interrupt in imports 
-import os, signal
+import fnmatch, os, signal
 if __name__ == '__main__':
 	signal.signal(signal.SIGINT, lambda signum, frame:os._exit(2))
 
-import  argparse, atexit, copy, glob, io, json, re, requests, shutil, subprocess, sys, tempfile, traceback, zipfile
+import  argparse, atexit, copy, glob, io, json, re, shutil, subprocess, sys, tempfile, traceback, zipfile
 from collections import OrderedDict
 from shutil import copy2, copystat
 
@@ -23,7 +23,7 @@ class InternalError(Exception):
 
 default_c_compilers = 'dcc:dcc --valgrind'
 #default_c_compilers = 'gcc -std=c99 -Wall -Wno-unused -O -lm'
-suffixes = "pl py sh java cgi rb".split();
+suffixes = "pl py sh java cgi rb js".split();
 debug = 0
 my_name = 'autotest'
 
@@ -43,7 +43,8 @@ def process_arguments():
 	parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter,epilog=extra_help)
 	parser.add_argument("-a", "--autotest_directory", help="directory containing test specifications")
 	parser.add_argument("-c", "--commit", help="test files from COMMIT instead of latest commit")
-	parser.add_argument("-C", "--c_compilers", default=os.environ.get('DRYRUN_COMPILERS', default_c_compilers), help="test C programs using these compilers")
+	parser.add_argument("-C", "--c_compilers", default=os.environ.get('AUTOTEST_C_COMPILERS', os.environ.get('DRYRUN_COMPILERS', default_c_compilers)), help="test C programs using these compilers")
+	parser.add_argument("--c_checkers", default=os.environ.get('AUTOTEST_C_CHECKERS', ''), help="check C programs using these compilers")
 	parser.add_argument("-d", "--debug", action='count', help="print debug information")
 	parser.add_argument("-e", "--exercise",  help="run tests for EXERCISE")
 	parser.add_argument("-f", "--file", nargs='+', default=[], help="add a copy of this file to the test directory ")
@@ -76,12 +77,15 @@ def process_arguments():
 	source_args.add_argument("-S", "--stdin", action="store_true", help="test file supplied on standard input")
 	source_args.add_argument("-t", "--tarfile", help="test files from this tarfile, can be http URL")
 	source_args.add_argument("-s", "--student", help="test files from STUDENT's repository on gitlab.cse.unsw.edu.au")
+	source_args.add_argument("-D", "--directory", help="test files from this directory")
 
 	args = parser.parse_args()
 	global debug
 	debug = int(os.environ.get('DEBUG', 0) or args.debug or 0)
 	if args.colorize:
+		# is there a better way to do this
 		os.environ['DCC_COLORIZE_OUTPUT'] = 'true'
+		os.environ['C_CHECK_COLORIZE_OUTPUT'] = 'true'
 	if debug: print('raw args:', args, file=sys.stderr)
 	if len(args.extra_arguments) == 2 and re.search(r'\.tar$', args.extra_arguments[0]):
 		# give calls dryrun this way
@@ -94,6 +98,8 @@ def process_arguments():
 		else:
 			print("%s: no exercise specified" % (my_name), file=sys.stderr)
 			sys.exit(1)
+	if not args.exercise and args.autotest_directory:
+		args.exercise = os.path.basename(args.autotest_directory)
 	return (parser, args)
 
 def normalize_arguments(parser, args, tests):
@@ -109,7 +115,7 @@ def normalize_arguments(parser, args, tests):
 	for arg in args.extra_arguments:
 		p = re.sub(r'^\./', '', arg)
 		basename_p = re.sub(r'\.[a-z]{1,4}$', '', p)
-		if arg in files:
+		if any(fnmatch.fnmatch(arg, f) for f in files):
 			args.file += [arg]
 		elif p in programs:
 			args.programs += [p]
@@ -142,13 +148,14 @@ def normalize_arguments(parser, args, tests):
 		if not extra_labels:
 			extra_labels = [label for label in tests if set(tests[label].files).intersection(args.file)]
 		args.labels += extra_labels
-		args.file = list(args.file)
+		args.file = set(args.file)
 	if debug: print('labels:', args.labels, file=sys.stderr)
 	# if no labels or programs, run all the tests for the exercise
 	if not args.labels:
 		args.labels = list(tests.keys())
 	args.programs = set(tests[label].program for label in args.labels)
-	args.file = set(args.file + [f for label in args.labels for f in tests[label].files])
+	if not args.file:
+		args.file = set(f for label in args.labels for f in tests[label].files)
 	args.optional_files += [f for label in args.labels for f in tests[label].parameters.get('optional_files', [])]
 	args.optional_files = set(args.optional_files)
 	if (args.gitlab_cse or args.commit or args.student) and not args.git:
@@ -157,16 +164,16 @@ def normalize_arguments(parser, args, tests):
 
 def main():
 	# strip most environment variables to avoid problems with complex tests
-	keep_variables = "PATH DEBUG".split()
+	keep_variables = "PATH DEBUG DRYRUN_DIR DCC_COLORIZE_OUTPUT C_CHECK_COLORIZE_OUTPUT DRYRUN_COMPILERS LANG LANGUAGE LC_COLLATE LC_NUMERIC LC_ALL".split()
 	for variable in list(os.environ.keys()):
-		if variable not in keep_variables:
+		if variable not in keep_variables and not variable.startswith("AUTOTEST_"):
 			os.environ.pop(variable, None)
-	os.environ['LANG'] = 'en_AU.utf8'
-	os.environ['LANGUAGE'] = 'en_AU:en'
+#	os.environ['LANG'] = 'en_AU.utf8'
+#	os.environ['LANGUAGE'] = 'en_AU:en'
 	os.environ['LC_COLLATE'] = 'POSIX'
 	os.environ['LC_NUMERIC'] = 'POSIX'
-	os.environ['PATH'] = course_configuration['PATH']
-	
+	os.environ['PERL5LIB'] = '.'
+	os.environ['PATH'] = course_configuration['PATH'] + ':' + os.environ.get('PATH', '.')
 	
 	(parser, args) = process_arguments()
 	if not args.autotest_directory and 'DRYRUN_DIR' in os.environ:
@@ -264,8 +271,10 @@ def run_tests_and_upload_results(tests, args, zid):
 	if debug:
 		print(args.ssh_upload_url, {"zid":zid, "exercise":args.exercise})
 	try:
+		# requests may not be installed 
+		import requests
 		r = requests.post(args.ssh_upload_url, data={"zid":zid, "exercise":args.exercise}, files={"zip": ("zip", buffer)})
-	except requests.exceptions.RequestException as e:
+	except Exception as e:
 		if debug:
 			print(e, file=sys.stderr)
 		return exit_status
@@ -328,11 +337,6 @@ def run_tests(tests, args, file=sys.stdout):
 	for test_label in tests:
 		if test_label in args.labels:
 			test = tests[test_label]
-			missing_files = [f for f in test.files if not glob.glob(f)]
-			if missing_files:
-				print("Test %s (%s) - "% (test.label, test.description), colored("could not be run", 'red'),  "because these files are missing:" , colored(" ".join(missing_files), 'red'), flush=True, file=file)
-				n_tests_not_run += 1
-				continue
 			test_compiler_parameters = (test.parameters.get('compilers', None), test.parameters.get('compiler_args', None))
 			if 'pre_compile_command' in test.parameters:
 				if debug:
@@ -343,6 +347,11 @@ def run_tests(tests, args, file=sys.stdout):
 				(output, compile_commands[test.program], pre_execute_commands[test.program]) = compile_program(test, args)
 #               if not compile_commands[test.program]:
 				print(output, file=file)
+			missing_files = [f for f in test.files if not glob.glob(f)]
+			if missing_files:
+				print("Test %s (%s) - "% (test.label, test.description), colored("could not be run", 'red'),  "because these files are missing:" , colored(" ".join(missing_files), 'red'), flush=True, file=file)
+				n_tests_not_run += 1
+				continue
 			if compile_commands[test.program]:
 				print("Test %s (%s) -" % (test.label, test.description), end=' ', file=file)
 				# run individual test for each compiler
@@ -536,24 +545,31 @@ def compile_program(test, args):
 #        return ('', [''], [''])
 	pre_execute_commands = [lambda:None]
 	basename, extension = os.path.splitext(program)
+	if debug: print('extension:', extension, file=sys.stderr)
 	if not extension and test.files:
-		extension = os.path.splitext(test.files[0])[1]
+		basename, extension = os.path.splitext(test.files[0])
+		if not program:
+			program = test.files[0]
 		if extension == '.h':
 			extension = '.c'
-	if not extension:
-		for lang in ['pl', 'py', 'sh', 'c', 'cc', 'java']:
+	if not extension or extension == '.*':
+		for lang in ['pl', 'py', 'sh', 'c', 'cc', 'java', 'js']:
 			suffix = '.' + lang
-			if os.path.exists(program  + suffix):
-				if debug:  print('found:', program  + suffix, file=sys.stderr)
-				basename = program
+			if os.path.exists(basename  + suffix):
+				if debug:  print('found:', basename  + suffix, file=sys.stderr)
 				extension = suffix
-				program += suffix
 				if lang in ['pl', 'py', 'sh']:
 					pre_execute_commands = [lambda basename=basename,lang=lang:create_link(basename, lang)]
+					program = basename  +  suffix
 				elif lang in ['java']:
 					pre_execute_commands = [lambda basename=basename:open(basename,"w").write("#!/bin/bash\njava %s $@" % basename) and os.chmod(basename, 0o700)]
-				break
-	if debug: print('extension:', extension, file=sys.stderr)
+					program = basename
+				elif lang in ['js']:
+					program = basename  +  suffix
+					pre_execute_commands = [lambda basename=basename:open(basename,"w").write("#!/bin/bash\nnode %s $@" % program) and os.chmod(basename, 0o700)]
+				elif lang in ['c','cc']:
+					program = basename
+	if debug: print('program', program, 'basename', basename, 'extension:', extension, file=sys.stderr)
 	if extension in ['.pl', '.py', '.sh']:
 		if os.path.exists(program):
 			os.chmod(program, 0o700)
@@ -580,22 +596,36 @@ def compile_program(test, args):
 	# run syntax check or compilers
 	run = ['']
 	compile_commands = ['']
+	glob_lists = [glob.glob(g) for g in test.files]
+	test_files = [item for sublist in glob_lists for item in sublist]
 	if extension == ".c":
-		compiler_args = make_list(interpolate_backquotes(test.parameters.get('compiler_args', test.files + ['-o', program])))
+		compiler_args = make_list(interpolate_backquotes(test.parameters.get('compiler_args', test_files + ['-o', program])))
 		compilers = test.parameters.get('compilers', args.c_compilers)
 		compile_commands = [compiler.split() + compiler_args for compiler in compilers.split(':')]
 		# if multiple compilers - suffix executable with .n
 		if len(compile_commands) > 1:
-			run = [r[0:-1] + [r[-1] + '.' + str(i)] for (i, r) in enumerate(compile_commands)]
-			pre_execute_commands = [lambda basename=basename,i=i:create_link(basename, i) for (i, c) in enumerate(compile_commands)]
+			run = [r[0:-1] + [r[-1] + '.' + str(i)] for (i, r) in enumerate(compile_commands)]	
+			compile_target = program
+			if '-o' in compiler_args[0:-1]:
+				compile_target = compiler_args[compiler_args.index('-o') + 1]
+			pre_execute_commands = [lambda basename=basename,i=i:create_link(compile_target, i) for (i, c) in enumerate(compile_commands)]
 		else:
 			run = list(compile_commands)
+		checkers = test.parameters.get('checkers', args.c_checkers)
+		if isinstance(checkers, list):
+			checkers = ' '.join(checkers)
+		if checkers:
+			check_commands = [checker.split() + test_files for checker in checkers.split(':')]
+			run += check_commands
 	elif extension == ".cc":
-		compiler_args = test.parameters.get('compiler_args', test.files + ['-o', program])
+		compiler_args = test.parameters.get('compiler_args', test_files + ['-o', program])
 		run = [['g++'] + compiler_args]
 	elif extension == ".java":
-		compiler_args = test.parameters.get('compiler_args', test.files)
+		compiler_args = test.parameters.get('compiler_args', test_files)
 		run = [['javac'] + compiler_args]
+	elif extension == ".js":
+		compiler_args = test.parameters.get('compiler_args', test_files)
+		run = [['node', '--check'] + compiler_args]
 	elif extension == ".pl":
 		run = [['perl', '-cw ', program]]
 	elif extension == ".py":
@@ -612,12 +642,17 @@ def compile_program(test, args):
 		if command:
 			if debug: print(" ".join(command), file=sys.stderr)
 			(errors, exit_status) = system(command)
-			if exit_status != 0:
-				return (output + errors, [], [])
-			if compile_commands[i]:
+			if i < len(compile_commands):
+				if compile_commands[i] and args.show_reproduce_command:
+					output += " ".join(compile_commands[i]) + "\n" 
 				output += errors
+			else:
 				if args.show_reproduce_command:
-					output += " ".join(compile_commands[i]) + "\n" + errors
+					output += " ".join(run[i]) + "\n"
+				output += errors
+			if debug: print('exit_status', exit_status, file=sys.stderr)
+			if exit_status != 0:
+				return (output, [], [])
 	return (output, compile_commands, pre_execute_commands)
 
 # run command merging stdin & stdout
@@ -651,7 +686,8 @@ def fetch_submission(temp_dir, args):
 			execute(['tar', '-x',  '-f', 'submission.tar'])
 		else:
 			execute(['tar', '-x', '-C', temp_dir, '-f', args.tarfile], print_command=False)
-			os.chdir(temp_dir)
+	elif args.directory:
+		copy_directory(args.directory, temp_dir)
 	elif args.git:
 		os.chdir(temp_dir)
 		if args.commit:
@@ -691,7 +727,7 @@ def fetch_submission(temp_dir, args):
 			try:
 				with open(file, 'w') as f:
 					f.write(sys.stdin.read())
-			except IOError as err:
+			except IOError:
 				die("can not create %s" % file)
 			return
 		if debug:
@@ -710,23 +746,36 @@ def fetch_submission(temp_dir, args):
 							# Kludge to pick up include files
 							with open(file) as f:
 								for line in f:
-									m = re.match(r'\b(use|require|include)\s*[\'"](.*?)[\'"]', line, flags=re.I)
+									m = re.search(r'\b(require|include)\s*[\'"](.*?)[\'"]', line, flags=re.I)
 									if m:
 										files_to_copy.add(m.group(2))
+									m = re.search(r'^\s*\b(use|require)\s*(\S+)', line, flags=re.I)
+									if m:
+										files_to_copy.add(m.group(2) + '.pm')
 						except UnicodeDecodeError:
 							die("%s is not a text file" % file)
 				except IOError:
 					continue
-		os.chdir(temp_dir)
 
 def find_autotest_dir(submission_name, autotest_subdir=['autotest','dryrun'], tests_filename='tests.txt'):
 	d = course_configuration['base_directory']
+	# Ugly hacks - they should be moved to per class configuration
 	names = [submission_name]
 	if '.' in submission_name:
 		names.append(re.sub(r'\..*', '', submission_name))
-	m = re.match(r'(\w+\d\d_)?(.*)', submission_name)
+	m = re.match(r'(\w+?\d{1,2}_)?(.*)', submission_name)
 	if m:
 		names.append(re.sub(r'\..*', '', m.group(2)))
+	m = re.match(r'(\w+\d{1,2}_)?(.*)', submission_name)
+	if m:
+		names.append(re.sub(r'\..*', '', m.group(2)))
+
+	if 'AUTOTEST_DIRECTORY' in os.environ:
+		for activity in names:
+			path = os.path.join(os.environ['AUTOTEST_DIRECTORY'], activity)
+			if os.path.exists(os.path.join(path, tests_filename)):
+				return path
+
 	for activity in names:
 		path = os.path.join(d, 'activities', activity)
 		if debug > 1:
@@ -788,7 +837,7 @@ def copy_directory(src, dst, symlinks=False, ignore=None):
 			else:
 				copy2(srcname, dstname)
 		except OSError as why:
-			# we don't want to stop if there is an unreadbable file - just produce an error
+			# we don't want to stop if there is an unreadable file - just produce an error
 			print('Warning:', why, file=sys.stderr)
 
 if __name__ == '__main__':
