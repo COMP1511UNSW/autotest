@@ -314,13 +314,18 @@ def run_support_command(command, result_cache={}, print_command=False, file=sys.
 		
 	# FileNotFoundError may be raised
 	# it will be caught and an internal error message printed
+	#
+	# FIXME: sending the output straight to file would be better but
+	# doesn't work for unknown reasons
+	# when it is a Tee object created in upload_results.py
+	 
 	p = subprocess.run(cmd,
 		shell=isinstance(cmd, str),
 		input='',
-		stdout=file,
-		stderr=file,
+		stdout=subprocess.PIPE,
+		stderr=subprocess.STDOUT,
 		universal_newlines=True)
-
+	file.write(p.stdout)
 
 	if debug > 1:
 		print(f'{cmd} exit status {p.returncode}', file=sys.stderr)
