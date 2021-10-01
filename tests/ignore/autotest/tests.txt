@@ -1,0 +1,16 @@
+program=echo.sh
+expected_stdout="Hello World!\n"
+
+ignore_case ignore_case=1 arguments="hello WORLD!"
+
+ignore_whitespace ignore_whitespace=1 arguments=" Hello\tWorld  !"
+
+ignore_trailing_whitespace ignore_trailing_whitespace=1 arguments="Hello World!    "
+
+ignore_characters ignore_characters="!@" arguments="@Hello World@"
+
+compare_only_characters compare_only_characters="eW" arguments="ello Wrld@"
+
+ignore_blank_lines ignore_blank_lines=True arguments="\nHello World!\n\n"
+
+postprocess_output_command postprocess_output_command="sed s/z//g"  arguments="zHello zWorld!z" 

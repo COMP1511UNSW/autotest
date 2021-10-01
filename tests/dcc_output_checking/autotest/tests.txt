@@ -1,0 +1,17 @@
+files="hello.c"
+dcc_output_checking=true
+expected_stdout="hello\nworld\n"
+ignore_case=1
+postprocess_output_command="sed 's/0x[a-z0-9]*/0x/g'"
+
+implicit_output_checking_pass arguments=hello world 
+implicit_output_checking_fail arguments=good-bye world 
+
+
+dcc_output_checking=false
+explicit_no_output_checking_pass arguments=hello World 
+explicit_no_output_checking_fail arguments=good-bye World 
+
+dcc_output_checking=true
+explicit_output_checking_pass arguments=Hello world 
+explicit_output_checking_fail arguments=Good-bye world 

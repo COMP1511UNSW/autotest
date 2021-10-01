@@ -1,0 +1,27 @@
+files=prime.c
+
+# specifying command-lines arguments
+test1  arguments=41  expected_stdout="41 is prime.\n"
+
+# specifying stdin
+test2  stdin="42"  expected_stdout="42 is not prime.\n"
+
+# using files to specify stdin and expected_stdout
+test3  stdin=['43.txt']  expected_stdout=['43_expected_output.txt']
+
+# running a  Shell command
+test4 command="echo 44 | prime"   expected_stdout="44 is not prime.\n"
+
+# using two line to specifiy test plus triple-quote for a multi-line string
+test5  arguments=45
+test5  expected_stdout="""45 is not prime.
+"""
+
+# specify more flexibility in test acceptance
+# by ignoring white space, some punctuation characters (",.!") and extra new lines
+test6  ignore_whitespace=True  ignore_blank_lines=True  ignore_characters=",.!"
+test6  arguments=46  expected_stdout="46 is not prime.\n"
+
+
+# make test succeed if it has just right digits in output
+test7  arguments=47 compare_only_characters="0123456789" expected_stdout="47 is not prime.\n"

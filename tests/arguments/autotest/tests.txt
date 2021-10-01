@@ -1,0 +1,8 @@
+files=echo.sh
+program=./echo.sh
+
+1 expected_stdout="\n"
+2 arguments=hello expected_stdout="hello\n"
+3 arguments=hello world  expected_stdout="hello world\n"
+arguments=["hello","world"]
+4  expected_stdout="hello world\n"

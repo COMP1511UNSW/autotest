@@ -1,0 +1,6 @@
+files="a.sh"
+1 command="echo start;./a.sh;echo end"
+1 expected_stdout="""start
+hello
+end
+"""

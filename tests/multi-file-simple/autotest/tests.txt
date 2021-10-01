@@ -1,0 +1,4 @@
+files=a.c b.c
+program=a
+
+1 command=./a expected_stdout="b\n"

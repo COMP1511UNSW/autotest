@@ -1,0 +1,27 @@
+command=echo.sh hello
+stdin="sample input"
+expected_stdout="world\n"
+compile_commands=["echo fake compile command"]
+
+description="sample description"
+check_everything_shown      
+
+show_stdin=0
+check_actual_output_not_shown      
+
+show_actual_output=0
+check_actual_output_not_shown      
+
+show_expected_output=0
+check_expected_output_not_shown    
+
+show_diff=0 
+check_diff_not_shown               
+
+show_reproduce_command=0
+check_reproduce_command_not_shown  
+
+show_compile_command=0
+compile_commands=["echo new fake compile command"]
+check_compile_command_not_shown    
+

@@ -1,0 +1,13 @@
+files="a.sh"
+environment_set={'answer' :42 }
+
+set_environment_variable command="echo $answer"
+set_environment_variable expected_stdout="42\n"
+
+# SAMPLE_ENVIRONMENT_VARIABLE set in do_tests.sh
+filtered_environment_variable command="echo $SAMPLE_ENVIRONMENT_VARIABLE"
+filtered_environment_variable expected_stdout="\n"
+
+environment_kept='SAMPLE_ENVIRONMENT_VARIABLE'
+environment_kept command="echo $SAMPLE_ENVIRONMENT_VARIABLE"
+environment_kept expected_stdout="sample_value\n"

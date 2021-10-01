@@ -1,0 +1,17 @@
+program=echo.sh
+arguments="Hello World!"
+
+expected_stdout expected_stdout="Hello World!\n"
+#expected_stdout_file expected_stdout=['hello.txt']
+#expected_stdout_file_deprocated expected_stdout_file='hello.txt'
+
+#command="echo 1 >one.txt; echo 2 >two.txt; echo 3 >three.txt; echo stdout; echo stderr 1>&2"
+#expected_output_pass expected_stdout='stdout\n' expected_stderr='stderr\n' expected_files={"one.txt":"1\n", "two.txt":"2\n","three.txt":"3\n"}
+#expected_output_fail expected_stdout='stdout\n' expected_stderr='stderr\n' expected_files={"one.txt":"1\n", "two.txt":"42\n","three.txt":"3\n"}
+#
+#stdin stdin="Hello World!\n" command="cat" expected_stdout="Hello World!\n"
+#stdin_file stdin=['hello.txt'] command="cat" expected_stdout="Hello World!\n"
+#stdin_file_deprocated stdin_file=hello.txt command="cat" expected_stdout="Hello World!\n"
+#
+command="echo 1 >one.txt"
+expected_file_deprocated_1 expected_file_name="one.txt"

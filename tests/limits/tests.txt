@@ -1,0 +1,8 @@
+files=autotest.py
+arguments=-a autotest
+# stop minor updates to autotest output breaking test
+ignore_blank_lines=1
+ignore_case=1
+compare_only_characters=abcdefghijklmnopqrstuvwxyz
+
+main expected_stdout="bash -n echo.sh\nTest max_open_files_should_pass (/bin/true) - passed\nTest max_open_files_should_fail ('/bin/true 3>3 4>4 5>5 6>6 7>7 8>8') - failed (errors)\nYour program produced these errors:\n/bin/sh: 1: cannot create 6: Too many open files\nYou can reproduce this test by executing these commands:\n  /bin/true 3>3 4>4 5>5 6>6 7>7 8>8\nTest max_cpu_seconds_should_fail ('while true; do :; done') - failed (errors)\nYour program produced these errors:\nError: CPU limit of 1 seconds exceeded\nYou can reproduce this test by executing these commands:\n  while true\n  do :\n  done\nTest max_file_size_bytes_should_fail ('yes >out') - failed (errors)\nYour program produced these errors:\nFile size limit exceeded\nYou can reproduce this test by executing these commands:\n  yes >out\nTest max_stdout_bytes_should_fail (yes) - failed (errors)\nYour program produced these errors:\n\nError too much output - maximum stdout bytes of 32 exceeded.\nYour program produced these 32 bytes of output before it was terminated:\ny\ny\ny\ny\ny\ny\ny\ny\ny\ny\ny\ny\ny\ny\ny\ny\nYou can reproduce this test by executing these commands:\n  yes\nTest max_stderr_bytes_should_fail ('yes 1>&2') - failed (errors)\nYour program produced these errors:\ny\ny\ny\ny\ny\ny\ny\ny\ny\ny\ny\ny\ny\ny\ny\ny\nYou can reproduce this test by executing these commands:\n  yes 1>&2\n1 tests passed 5 tests failed\n"
