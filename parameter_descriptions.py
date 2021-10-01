@@ -296,8 +296,8 @@ PARAMETER_LIST += [
 	Parameter(
 		"default_compilers",
 		default = {
-			'c' : [['dcc', '-o', '%']],
-			'cc': [['g++', '-o', '%']],
+			'c' : [['dcc', '-Wall']],
+			'cc': [['g++', '-Wall']],
 			'java' : [['javac']],
 			'rs' : [['rustc']],
 			},
@@ -318,20 +318,33 @@ PARAMETER_LIST += [
 		""",
 	),
 		
+	Parameter(
+		"default_compiler_args",
+		default = {
+			'c' : [['-o', '%']],
+			'cc': [['-o', '%']],
+			},
+		description = """
+			A dict which supplies a default value for the parameter **`compilers`** based on the suffix for the 
+			the first file specified by  the parameter **`files`**.
+			If '%' is present in a list, it is replaced by the **`program`**.
+		"""),
+
 		
 	Parameter(
 		"compiler_args",
 		default = [],
-		finalize = finalize_list_of_strings,
+		finalize = finalize_compiler_checker_list,
 		description = """
 			"List of arguments strings added to every compilation"
+			If '%' is present in a list, it is replaced by the **`program`**.
 		"""),
 ]	
 
 
 def finalize_compile_commands(name,  value, parameters):
 
-	# paremeter has been set directly
+	# parameter has been set directly
 	if isinstance(value, str):
 		return [str]
 
