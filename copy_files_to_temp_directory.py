@@ -87,7 +87,7 @@ def fetch_submission(temp_dir, args):
 									if m:
 										files_to_copy.add(m.group(2) + '.pm')
 						except UnicodeDecodeError:
-							die("%s is not a text file" % file)
+							die(f"{file} is not a text file")
 				except IOError:
 					continue
 

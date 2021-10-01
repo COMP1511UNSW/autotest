@@ -61,7 +61,7 @@ def parse_arguments():
 	check_obsolete_arguments(args)
 	
 	args.debug = int(args.debug or os.environ.get('AUTOTEST_DEBUG', 0) or  0)
-	args.initial_tests, args.initial_parameters = parse_string('\n'.join(args.parameters or ''), source_name="command-line argument>", normalize_global_parameters=False, debug=args.debug)
+	args.initial_tests, args.initial_parameters = parse_string('\n'.join(args.parameters or ''), source_name="<command-line argument>", normalize_global_parameters=False, debug=args.debug)
 
 	# backwards compatibility
 	args.initial_parameters.setdefault('debug', args.debug)

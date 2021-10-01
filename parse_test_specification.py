@@ -94,7 +94,7 @@ def process_line(source_name, line_number, values, global_parameters, tests, tes
 	respecified_parameters.discard('label')
 	if respecified_parameters:
 		respecified = ', '.join(respecified_parameters)
-		raise TestSpecificationError(f"error - parameter specification multiples for test '{label}' ({respecified})")
+		raise TestSpecificationError(f"error - multiple parameter specifications for test '{label}' ({respecified})")
 
 	if label not in tests:
 		tests[label] = copy.deepcopy(global_parameters)
