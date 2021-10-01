@@ -600,7 +600,11 @@ PARAMETER_LIST += [
 		
 	Parameter(
 		"environment",
-		default = lambda test: test['__environment_filtered'] | test['environment_base'] | test['environment_set'],
+
+#       better but needs python 3.9
+#		default = lambda test: test['__environment_filtered'] | test['environment_base'] | test['environment_set'],
+
+		default = lambda test:{**test['__environment_filtered'], **test['environment_base'], **test['environment_set']},
 		finalize = finalize_dict_of_strings,
 		description = """
 			Dict specifying all environment variables for this test.<br>
