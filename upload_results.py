@@ -20,7 +20,7 @@ def run_tests_and_upload_results(tests, parameters, args):
 	upload_fields = parameters['upload_fields']
 	upload_fields['exercise'] = args.exercise
 	upload_fields['hostname'] = platform.node()
-	upload_fields['login'] = os.getlogin()
+	upload_fields['login'] = getlogin()
 
 	with open("autotest.log", "w") as f:
 		exit_status = run_tests(tests, parameters, args, file=Tee(f))
@@ -62,3 +62,20 @@ def zip_files_for_upload(stream, tests, parameters, args):
 	zf.close()
 
 
+def getlogin():
+	"""
+		attempt to get username robustly whatever the platform
+	"""
+	try:
+		import pwd
+		return pwd.getpwuid(os.geteuid()).pw_name
+	except Exception:
+		  pass      
+	try:
+		return os.getlogin()
+	except Exception:
+		pass
+	try:
+		return os.getenv('LOGNAME', '') or os.getenv('USER', '') or os.getenv('USERNAME', '')
+	except Exception:
+		return ''

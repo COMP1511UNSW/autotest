@@ -529,7 +529,8 @@ PARAMETER_LIST += [
 
 	Parameter(
 		"environment_kept",
-		default = 'ARCH|C_CHECK_.*|DCC_.*|DRYRUN_.*|LANG|LANGUAGE|LC_.*',
+		# guess at variables whose absence might break programs
+		default = 'ARCH|C_CHECK_.*|DCC_.*|DRYRUN_.*|LANG|LANGUAGE|LC_.*|LOGNAME|USER',
 		description = """
 			Environment variables are by default deleted to avoid them affecting testing.<br>
 			Environment variables whose entire name matches this regex are not deleted.<br>
