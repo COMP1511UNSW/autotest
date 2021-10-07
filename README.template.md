@@ -48,7 +48,7 @@ of the autotest specification.
 **-g, --generate_expected_output** generate expected output for the tests
 by executing the supplied files.
 
-for example, this will update the test specification in the directory  `my_autotest` using a 
+for example, this will update the test specification in the directory  `my_autotest` using a
 model solution in `my_solution`
 
 ```bash
@@ -58,7 +58,7 @@ $ autotest.py --generate_expected_output=update --directory my_solution  --autot
 
 ## Test Execution Environment
 
-A temporary directory is created for autotests and the program to be 
+A temporary directory is created for autotests and the program to be
 tested is copied there and compiled there if needed.
 
 By default any other files in the test specification directory are also
@@ -76,7 +76,7 @@ A test consists of a label and set of parameter value.
 
 Every test must have a unique label consisting of alphanumeric characters and underscore ([a-zA-Z0-9_]+)
 
-The file is read sequentially and when a test label is reached 
+The file is read sequentially and when a test label is reached
 a test is created with the current values of parameters.
 
 Assignments to parameter values apply to any following test or until
@@ -133,7 +133,7 @@ will produce an error unless the parameter name begins with a single '_'.
 Parameter names begining with '_' can be given values to be used in later f-strings.
 
 
-For convenience, values can also be written as shell-like unquoted strings 
+For convenience, values can also be written as shell-like unquoted strings
 if they contain only non-whitespace ASCII and none of these characters **\\ = [ ] { } " ' **.
 So for example, these are equivalent parameter assignments.
 
@@ -168,10 +168,26 @@ except strings with a first characters of '0', 'f' or 'F' are considered  **`Fal
 
 
 
-## Debugging Autotest
+## Debugging Autotests
 
-The command line parameter -d/--debug set increasing levels of debug output. 
+The command line parameter -d/--debug set increasing levels of debug output.
 
-This can also be done using the environmental variable **`AUTOTEST_DEBUG`** 
+This can also be done using the environmental variable **`AUTOTEST_DEBUG`**
 Python stack backtraces are only shown if **`AUTOTEST_DEBUG`** is set to a non-zero integer.
 
+
+
+## Embedding Autotests
+
+The script *`bundle_autotests.sh`* generates a single executable for autotest.
+
+It can also embed specified autotests in the executable allowing
+distribution of a single file containing a set of autotests and the code to run them.
+
+
+```
+$ bundle_autotests.sh my_autotest exercise1/autotest exercise2/autotest exercise3/autotest
+$ ./my_autotest exercise2
+Test 0 (./prime 42) - passed
+1 tests passed 0 tests failed
+```

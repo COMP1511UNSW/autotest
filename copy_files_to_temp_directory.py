@@ -1,6 +1,6 @@
 # create a temporary directory and copy the files needed for testing to it
 
-import atexit, glob, os, re, shutil, subprocess, sys, tempfile
+import atexit, glob, io, os, pkgutil, re, shutil, subprocess, sys, tarfile, tempfile
 from shutil import copy2, copystat
 from util import die
 
@@ -128,12 +128,33 @@ def copy_directory(src, dst, symlinks=False, ignore=None):
 			print('Warning:', why, file=sys.stderr)
 
 
-def cleanup(temp_dir=None,args={}):
-	if temp_dir and re.search('^/tmp/', temp_dir) and args.debug < 10:
+def cleanup(temp_dir=None, args={}):
+	if args and args.debug >= 10:
+		return
+	if temp_dir and temp_dir.startswith('/tmp/'):
 		shutil.rmtree(temp_dir)
+
 
 def execute(command, print_command=True):
 	if print_command:
 		print(" ".join(command))
 	if subprocess.call(command) != 0:
 		die("%s failed"%command[0])
+
+
+def load_embedded_autotest(exercise):
+	"""
+		if exercise is found as an embedded tar file
+		explode the tarfile to a temporary directory
+		and return the pathname for tests.txt
+		The script bundle_autotests.sh creates executablkes with embedded autotests.
+	"""
+	tar_data = pkgutil.get_data('embedded_autotests', exercise  + '.tar')
+	if not tar_data:
+		return None
+	temp_dir = tempfile.mkdtemp()
+	atexit.register(cleanup, temp_dir=temp_dir)
+	buffer = io.BytesIO(tar_data)
+	with tarfile.open(fileobj=buffer, mode='r|xz') as t:
+		t.extractall(temp_dir)
+	return os.path.join(temp_dir, 'tests.txt')

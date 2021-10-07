@@ -1,9 +1,10 @@
 # process command-line arguments
 
-import argparse, fnmatch, os, re, sys 
+import argparse, fnmatch, os, re, sys
 from parse_test_specification import parse_file, parse_string
 from util import die
 from run_test import Test
+from copy_files_to_temp_directory import load_embedded_autotest
 
 # rewrite the extra help
 
@@ -49,23 +50,23 @@ def parse_arguments():
 	source_args.add_argument("-G", "--git", help="add files from this this git repository to the test directory")
 	source_args.add_argument("-S", "--stdin", action="store_true", help="test file supplied on standard input")
 	source_args.add_argument("-t", "--tarfile", help="add files from this tarfile to the test directory, can be http URL")
-	
+
 	# these CSE specific parameters should be move parameters which can be specified in a shell wrapper
 	source_args.add_argument("--gitlab_cse", action="store_true", help="deprocated: test files from gitlab.cse.unsw.edu.au")
 	source_args.add_argument("--student", help="deprocated: test files from STUDENT's repository on gitlab.cse.unsw.edu.au")
 
-	add_obsolete_arguments(parser)	
+	add_obsolete_arguments(parser)
 
 	args = parser.parse_args()
-	
+
 	check_obsolete_arguments(args)
-	
+
 	args.debug = int(args.debug or os.environ.get('AUTOTEST_DEBUG', 0) or  0)
 	args.initial_tests, args.initial_parameters = parse_string('\n'.join(args.parameters or ''), source_name="<command-line argument>", normalize_global_parameters=False, debug=args.debug)
 
 	# backwards compatibility
 	args.initial_parameters.setdefault('debug', args.debug)
-		
+
 	if args.debug: print('raw args:', args, file=sys.stderr)
 	if len(args.extra_arguments) == 2 and re.search(r'\.tar$', args.extra_arguments[0]):
 		# give calls dryrun this way
@@ -141,6 +142,13 @@ def normalize_arguments(parser, args, tests):
 
 
 def find_test_specification(args):
+	if not args.exercise_directory and not args.autotest_directory and args.exercise:
+		test_specification_pathname = load_embedded_autotest(args.exercise)
+		if test_specification_pathname:
+			args.test_specification_pathname = test_specification_pathname
+			args.autotest_directory = os.path.dirname(test_specification_pathname)
+			return test_specification_pathname
+
 	if not args.exercise_directory:
 		args.exercise_directory = ['.']
 
@@ -175,14 +183,14 @@ def find_test_specification(args):
 		args.autotest_directory += '/'
 	if args.debug:
 		print('autotest_dir:',  args.autotest_directory, file=sys.stderr)
-		
+
 	args.test_specification_pathname = os.path.realpath(test_specification_pathname)
 	return args.test_specification_pathname
 
 
 def find_autotest_dir(exercise_directories, exercise, sub_pathnames, debug=0):
 	"""
-		search for a test specification file 
+		search for a test specification file
 	"""
 	# for convenience massage name into several possibilities
 	names = [exercise]
@@ -209,7 +217,7 @@ def find_autotest_dir(exercise_directories, exercise, sub_pathnames, debug=0):
 		die(f"no autotest found for {exercise}")
 	else:
 		die("no autotest found")
-		
+
 
 def add_obsolete_arguments(parser):
 	"""
@@ -265,7 +273,7 @@ def check_obsolete_arguments(args):
 # FIXME
 # move this CSE specific code to to the shell shim
 def repository_name(submission_name, account=None):
-	from autotest import get_zid 
+	from autotest import get_zid
 	zid = get_zid(account)
 	if re.search(r'^lab', submission_name):
 		submission_name = 'labs'
