@@ -6,7 +6,22 @@ from termcolor import colored as termcolor_colored
 from parse_test_specification import output_file_without_parameters
 from util import die
 
-def run_tests(tests, global_parameters, args, file=sys.stdout):
+
+# necessary for typehinting
+from typing import Dict
+
+# necessary for typing hinting as well
+from run_test import Test
+from argparse import Namespace
+# this feels dodgy
+from upload_results import Tee
+
+# I've suggested that this returns a bool, not 100% accurate...
+# But it returns 1 or 0? Why?
+def run_tests(tests: Dict[str, Test], global_parameters: Dict[str, str], args: Namespace, file: Tee = sys.stdout) -> bool:
+	# Keeping this around for investigating types easily (i.e. copy and pasting)
+	#print(type(tests), tests.keys(), type(tests["test1"]))	
+
 	debug = global_parameters['debug']
 	colored = termcolor_colored if global_parameters['colorize_output'] else lambda x,*a,**kw: x
 	if os.path.exists('./compile.sh'):
