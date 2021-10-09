@@ -6,6 +6,8 @@ from run_tests import run_tests
 
 # I feel like this can be better 
 # moved outside of run_tests_and_upload_results for typing purposes
+
+# nope, leads to circular import...how fun :(
 class Tee(object):
 	def __init__(self, stream):
 		self.stream = stream

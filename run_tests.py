@@ -8,17 +8,18 @@ from util import die
 
 
 # necessary for typehinting
-from typing import Dict
+from typing import Dict, List
 
 # necessary for typing hinting as well
 from run_test import Test
 from argparse import Namespace
-# this feels dodgy
-from upload_results import Tee
+# this gives a circular import... — this actually gives me large architectural
+# concerns.
+#from upload_results import Tee
 
 # I've suggested that this returns a bool, not 100% accurate...
-# But it returns 1 or 0? Why?
-def run_tests(tests: Dict[str, Test], global_parameters: Dict[str, str], args: Namespace, file: Tee = sys.stdout) -> bool:
+# But it returns 1 or 0? Why?													# if it was 3.10 could use | for alternative types for file...
+def run_tests(tests: Dict[str, Test], global_parameters: Dict[str, str], args: Namespace, file = sys.stdout) -> bool:
 	# Keeping this around for investigating types easily (i.e. copy and pasting)
 	#print(type(tests), tests.keys(), type(tests["test1"]))	
 
@@ -62,10 +63,12 @@ def run_tests(tests: Dict[str, Test], global_parameters: Dict[str, str], args: N
 	return 1 if n_tests_failed + n_tests_not_run else 0
 
 
-def run_one_test(test, args, file=sys.stdout, previous_errors={}):
+# ignoring file again for now, also not sure on the type of previous_errors...
+def run_one_test(test: Test, args: Namespace, file=sys.stdout, previous_errors={}):
 	"""
 		return -1 for test not run, 0 for test failed, 1 for test passed
 	"""
+
 	parameters = test.parameters
 	debug = parameters['debug']
 	label = parameters['label']
@@ -150,7 +153,12 @@ def run_one_test(test, args, file=sys.stdout, previous_errors={}):
 	return 0
 
 
-def run_checkers_pre_compile_command(test_files, parameters, file=sys.stdout):
+# Now parameters presents an issue.
+# The way params is set up is both very simple and complex:
+# It's just a dict, but it's values can include strings, lists, dicts,
+# lists within lists, etc. This makes typehinting a little complex 
+# (I believe we can get by this with ': Any', but it's still not completely ideal)
+def run_checkers_pre_compile_command(test_files: List[str], parameters, file=sys.stdout):
 	"""
 		run any checkers specified for the files in the test
 		plus any pre_compile_command
@@ -172,11 +180,12 @@ def run_checkers_pre_compile_command(test_files, parameters, file=sys.stdout):
 	return True
 
 
-def run_compilers(test_files, parameters, file=sys.stdout, debug=0):
+def run_compilers(test_files: List[str], parameters, file=sys.stdout, debug: int = 0):
 	"""
 		run any compilers specified for the the test
 		return False iff any compiler fails, True otherwise
 	"""
+
 	compile_commands = parameters['compile_commands']
 	if not compile_commands:
 		compile_commands = provide_multi_language_support(test_files, **parameters)
@@ -203,8 +212,8 @@ def run_compilers(test_files, parameters, file=sys.stdout, debug=0):
 			return False
 	return True
 
-
-def link_program(program, compile_command, test_files, linked_program={}, debug=0):
+# TO-DO: make debug levels an enum, possibly implement better debugging
+def link_program(program: str, compile_command: List[str], test_files: List[str], linked_program:Dict[str, str]={}, debug: int=0):
 	"""
 		link appropriate binary for test execution
 		linked_program is used to track current link to allows us to avoid some workxy
@@ -238,7 +247,7 @@ def link_program(program, compile_command, test_files, linked_program={}, debug=
 		subprocess.call("echo after link command;ls -l", shell=True)
 
 
-def get_unique_program_name(program, compile_command, test_files):
+def get_unique_program_name(program: str, compile_command: List[str], test_files: List[str]):
 	"""
 		form a unique program name based on compile arguments
 		so we can have multiple binaries for a program.
@@ -249,7 +258,9 @@ def get_unique_program_name(program, compile_command, test_files):
 	return program + '.' + '__'.join([compile_command_str] + test_files).replace('/', '___')
 
 
-def chmod_program(program, chmod_cache={}, **other_parameters):
+# making an assumption with the chmod_cache tbh
+# other parameters suffers from the same issue as 'parameters', for obvious reasons
+def chmod_program(program: str, chmod_cache: Dict[str, str]={}, **other_parameters):
 	chmod_str = "chmod " + program
 	if chmod_str in chmod_cache:
 		return
@@ -260,8 +271,8 @@ def chmod_program(program, chmod_cache={}, **other_parameters):
 		# not clear what we shoud do here
 		pass
 
-
-def provide_multi_language_support(test_files, program, files, default_compilers, debug, **other_parameters):
+# Made some assumptions here
+def provide_multi_language_support(test_files: List[str], program: str, files: List[str], default_compilers: Dict[str, str], debug: int, **other_parameters):
 	"""
 		provide backwards-compatible support of autotests which accept  multiple languages
 		this needs to be generalized and incorporated in parameter_descriptions.py
@@ -293,7 +304,7 @@ def provide_multi_language_support(test_files, program, files, default_compilers
 		return compilers
 
 
-def run_support_command(command, result_cache={}, print_command=False, file=sys.stdout, arguments=[], unlink=None, debug=0):
+def run_support_command(command: List[str], result_cache:Dict[str, bool]={}, print_command: bool=False, file=sys.stdout, arguments: List[str]=[], unlink: str = None, debug: int = 0):
 	"""
 		run support command, shell used iff command is a string
 
@@ -308,6 +319,7 @@ def run_support_command(command, result_cache={}, print_command=False, file=sys.
 
 		return True if command has 0 exit status, False otherwise
 	"""
+	
 	if isinstance(command, str):
 		cmd = command + ' ' + ' '.join(arguments)
 		cmd_str = cmd
@@ -353,10 +365,11 @@ def run_support_command(command, result_cache={}, print_command=False, file=sys.
 	return result
 
 
-def generate_expected_output(tests, global_parameters, args, file=sys.stdout):
+def generate_expected_output(tests: Dict[str, Test], global_parameters, args: Namespace, file=sys.stdout):
 	"""
 		generate expected output for tests from supplied solution
 	"""
+	
 	# print test specification with generated expected output to stdout
 	if args.generate_expected_output == 'stdout':
 		print_tests_and_expected_output(tests, args, sys.stdout)
@@ -381,13 +394,13 @@ def generate_expected_output(tests, global_parameters, args, file=sys.stdout):
 		with open(path, "w") as g:
 			g.write(new_contents)
 
-
-def print_tests_and_expected_output(tests, args, file):
+# file again presenting issues...
+def print_tests_and_expected_output(tests: Dict[str, Test], args: Namespace, file):
 	output_file_without_parameters(args.test_specification_pathname, initial_parameters=args.initial_parameters, initial_tests=args.initial_tests, debug=args.debug, file=file)
 	print_expected_output(tests, args, file)
 
 	
-def print_expected_output(tests, args, file):
+def print_expected_output(tests: Dict[str, Test], args: Namespace, file):
 	# ignore output from tests
 	with open(os.devnull, 'w') as dev_null:
 		for (label, test) in tests.items():
