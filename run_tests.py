@@ -8,7 +8,8 @@ from util import die
 
 
 # necessary for typehinting
-from typing import Dict, List
+from typing import Dict, List, Any, Union
+from collections.abc import Sequence
 
 # necessary for typing hinting as well
 from run_test import Test
@@ -17,9 +18,9 @@ from argparse import Namespace
 # concerns.
 #from upload_results import Tee
 
-# I've suggested that this returns a bool, not 100% accurate...
-# But it returns 1 or 0? Why?													# if it was 3.10 could use | for alternative types for file...
-def run_tests(tests: Dict[str, Test], global_parameters: Dict[str, str], args: Namespace, file = sys.stdout) -> bool:
+# Currently returns int for backwards compatibility. 
+# 												# if it was 3.10 could use | for alternative types for file...
+def run_tests(tests: Dict[str, Test], global_parameters: Dict[str, Any], args: Namespace, file = sys.stdout) -> int:
 	# Keeping this around for investigating types easily (i.e. copy and pasting)
 	#print(type(tests), tests.keys(), type(tests["test1"]))	
 
@@ -68,7 +69,6 @@ def run_one_test(test: Test, args: Namespace, file=sys.stdout, previous_errors={
 	"""
 		return -1 for test not run, 0 for test failed, 1 for test passed
 	"""
-
 	parameters = test.parameters
 	debug = parameters['debug']
 	label = parameters['label']
@@ -124,11 +124,16 @@ def run_one_test(test: Test, args: Namespace, file=sys.stdout, previous_errors={
 	if debug > 3:
 		subprocess.call("echo after for test run;ls -l", shell=True)
 
+	# currently assuming that .passed is a typo
 	failed_individual_tests = [it for it in individual_tests if not it.test_passed]
-	test.passed = not failed_individual_tests
+	# currently assuming that .passed is a typo? mypy complains regardless.
+	# if it's an intended parameter, it should be specified in the class...
+	# changing for now.
+	test.test_passed = not failed_individual_tests
 	test.stdout = individual_tests[0].stdout
 	test.stderr = individual_tests[0].stderr
-	if test.passed:
+	# currently assuming that .passed is a typo
+	if test.test_passed:
 		print(colored("passed", 'green'), flush=True, file=file)
 		return 1
 
@@ -247,7 +252,7 @@ def link_program(program: str, compile_command: List[str], test_files: List[str]
 		subprocess.call("echo after link command;ls -l", shell=True)
 
 
-def get_unique_program_name(program: str, compile_command: List[str], test_files: List[str]):
+def get_unique_program_name(program: str, compile_command: Union[List[str], str], test_files: List[str]):
 	"""
 		form a unique program name based on compile arguments
 		so we can have multiple binaries for a program.
@@ -258,9 +263,8 @@ def get_unique_program_name(program: str, compile_command: List[str], test_files
 	return program + '.' + '__'.join([compile_command_str] + test_files).replace('/', '___')
 
 
-# making an assumption with the chmod_cache tbh
 # other parameters suffers from the same issue as 'parameters', for obvious reasons
-def chmod_program(program: str, chmod_cache: Dict[str, str]={}, **other_parameters):
+def chmod_program(program: str, chmod_cache: Dict[str, bool]={}, **other_parameters):
 	chmod_str = "chmod " + program
 	if chmod_str in chmod_cache:
 		return
@@ -271,10 +275,11 @@ def chmod_program(program: str, chmod_cache: Dict[str, str]={}, **other_paramete
 		# not clear what we shoud do here
 		pass
 
-# Made some assumptions here
-def provide_multi_language_support(test_files: List[str], program: str, files: List[str], default_compilers: Dict[str, str], debug: int, **other_parameters):
+# Made some assumptions here																# this type for default_compilers is VERY sketchy...originally jad 
+																						# Dict[str, str], but I have no guarantees at present of that being correct...
+def provide_multi_language_support(test_files: List[str], program: str, files: List[str], default_compilers: Dict[str, Any], debug: int, **other_parameters) -> List[str]:
 	"""
-		provide backwards-compatible support of autotests which accept  multiple languages
+		provide backwards-compatible support of autotests which accept multiple languages
 		this needs to be generalized and incorporated in parameter_descriptions.py
 	"""
 	if os.path.exists(program) or not files:
@@ -294,14 +299,17 @@ def provide_multi_language_support(test_files: List[str], program: str, files: L
 		os.link(filename, basename)
 		return []
 	elif suffix in ['java', 'js']:
-		with open(filename, "w") as f:
-			f.write(f"#!/bin/bash\n{'node' if suffix == 'js' else 'java'} {basename} \"$@\"")
+		# changed variable name to stop mypy complaing...was f rather than file...
+		with open(filename, "w") as file:
+			file.write(f"#!/bin/bash\n{'node' if suffix == 'js' else 'java'} {basename} \"$@\"")
 		return []
 	elif suffix in ['c','cc']:
 		compilers = default_compilers.get(suffix, [])
 		for (index, compiler) in enumerate(compilers):
 			compilers[index] = [program if a == '%' else str(a) for a in compiler]
 		return compilers
+	# just in case? Hoping this won't break anything...Could also return None...
+	return []
 
 
 def run_support_command(command: List[str], result_cache:Dict[str, bool]={}, print_command: bool=False, file=sys.stdout, arguments: List[str]=[], unlink: str = None, debug: int = 0):
