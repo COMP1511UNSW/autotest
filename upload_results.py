@@ -3,23 +3,18 @@
 import io, os, platform, sys, zipfile
 from run_tests import run_tests
 
-
-# I feel like this can be better 
-# moved outside of run_tests_and_upload_results for typing purposes
-
-# nope, leads to circular import...how fun :(
-class Tee(object):
-	def __init__(self, stream):
-		self.stream = stream
-		self.fileno = stream.fileno
-	def flush(self):
-		sys.stdout.flush()
-		self.stream.flush()
-	def write(self, message):
-		sys.stdout.write(message)
-		self.stream.write(message)
-
 def run_tests_and_upload_results(tests, parameters, args):
+	class Tee(object):
+		def __init__(self, stream):
+			self.stream = stream
+			self.fileno = stream.fileno
+		def flush(self):
+			sys.stdout.flush()
+			self.stream.flush()
+		def write(self, message):
+			sys.stdout.write(message)
+			self.stream.write(message)
+
 	upload_url = parameters['upload_url']
 	upload_fields = parameters['upload_fields']
 	upload_fields['exercise'] = args.exercise

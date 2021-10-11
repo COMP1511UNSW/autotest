@@ -6,24 +6,14 @@ from termcolor import colored as termcolor_colored
 from parse_test_specification import output_file_without_parameters
 from util import die
 
-
 # necessary for typehinting
 from typing import Dict, List, Any, Union
 from collections.abc import Sequence
 
-# necessary for typing hinting as well
 from run_test import Test
 from argparse import Namespace
-# this gives a circular import... — this actually gives me large architectural
-# concerns.
-#from upload_results import Tee
 
-# Currently returns int for backwards compatibility. 
-# 												# if it was 3.10 could use | for alternative types for file...
 def run_tests(tests: Dict[str, Test], global_parameters: Dict[str, Any], args: Namespace, file = sys.stdout) -> int:
-	# Keeping this around for investigating types easily (i.e. copy and pasting)
-	#print(type(tests), tests.keys(), type(tests["test1"]))	
-
 	debug = global_parameters['debug']
 	colored = termcolor_colored if global_parameters['colorize_output'] else lambda x,*a,**kw: x
 	if os.path.exists('./compile.sh'):
@@ -63,9 +53,8 @@ def run_tests(tests: Dict[str, Test], global_parameters: Dict[str, Any], args: N
 	print(file=file)
 	return 1 if n_tests_failed + n_tests_not_run else 0
 
-
-# ignoring file again for now, also not sure on the type of previous_errors...
-def run_one_test(test: Test, args: Namespace, file=sys.stdout, previous_errors={}):
+# TO-DO: provide stricter type for previous_errors
+def run_one_test(test: Test, args: Namespace, file=sys.stdout, previous_errors: Dict[str, Any]={}):
 	"""
 		return -1 for test not run, 0 for test failed, 1 for test passed
 	"""
@@ -123,16 +112,11 @@ def run_one_test(test: Test, args: Namespace, file=sys.stdout, previous_errors={
 
 	if debug > 3:
 		subprocess.call("echo after for test run;ls -l", shell=True)
-
-	# currently assuming that .passed is a typo
+	
 	failed_individual_tests = [it for it in individual_tests if not it.test_passed]
-	# currently assuming that .passed is a typo? mypy complains regardless.
-	# if it's an intended parameter, it should be specified in the class...
-	# changing for now.
 	test.test_passed = not failed_individual_tests
 	test.stdout = individual_tests[0].stdout
 	test.stderr = individual_tests[0].stderr
-	# currently assuming that .passed is a typo
 	if test.test_passed:
 		print(colored("passed", 'green'), flush=True, file=file)
 		return 1
@@ -157,13 +141,7 @@ def run_one_test(test: Test, args: Namespace, file=sys.stdout, previous_errors={
 	
 	return 0
 
-
-# Now parameters presents an issue.
-# The way params is set up is both very simple and complex:
-# It's just a dict, but it's values can include strings, lists, dicts,
-# lists within lists, etc. This makes typehinting a little complex 
-# (I believe we can get by this with ': Any', but it's still not completely ideal)
-def run_checkers_pre_compile_command(test_files: List[str], parameters, file=sys.stdout):
+def run_checkers_pre_compile_command(test_files: List[str], parameters: Dict[str, Any], file=sys.stdout) -> bool:
 	"""
 		run any checkers specified for the files in the test
 		plus any pre_compile_command
@@ -185,7 +163,7 @@ def run_checkers_pre_compile_command(test_files: List[str], parameters, file=sys
 	return True
 
 
-def run_compilers(test_files: List[str], parameters, file=sys.stdout, debug: int = 0):
+def run_compilers(test_files: List[str], parameters, file=sys.stdout, debug: int = 0) -> bool:
 	"""
 		run any compilers specified for the the test
 		return False iff any compiler fails, True otherwise
@@ -218,7 +196,7 @@ def run_compilers(test_files: List[str], parameters, file=sys.stdout, debug: int
 	return True
 
 # TO-DO: make debug levels an enum, possibly implement better debugging
-def link_program(program: str, compile_command: List[str], test_files: List[str], linked_program:Dict[str, str]={}, debug: int=0):
+def link_program(program: str, compile_command: List[str], test_files: List[str], linked_program:Dict[str, str]={}, debug: int=0) -> None:
 	"""
 		link appropriate binary for test execution
 		linked_program is used to track current link to allows us to avoid some workxy
@@ -252,7 +230,7 @@ def link_program(program: str, compile_command: List[str], test_files: List[str]
 		subprocess.call("echo after link command;ls -l", shell=True)
 
 
-def get_unique_program_name(program: str, compile_command: Union[List[str], str], test_files: List[str]):
+def get_unique_program_name(program: str, compile_command: Union[List[str], str], test_files: List[str]) -> str:
 	"""
 		form a unique program name based on compile arguments
 		so we can have multiple binaries for a program.
@@ -263,8 +241,7 @@ def get_unique_program_name(program: str, compile_command: Union[List[str], str]
 	return program + '.' + '__'.join([compile_command_str] + test_files).replace('/', '___')
 
 
-# other parameters suffers from the same issue as 'parameters', for obvious reasons
-def chmod_program(program: str, chmod_cache: Dict[str, bool]={}, **other_parameters):
+def chmod_program(program: str, chmod_cache: Dict[str, bool]={}, **other_parameters: Dict[str, Any]) -> None:
 	chmod_str = "chmod " + program
 	if chmod_str in chmod_cache:
 		return
@@ -272,12 +249,10 @@ def chmod_program(program: str, chmod_cache: Dict[str, bool]={}, **other_paramet
 		os.chmod(program, 0o700)
 		chmod_cache[program] = True
 	except OSError:
-		# not clear what we shoud do here
+		# not clear what we should do here
 		pass
 
-# Made some assumptions here																# this type for default_compilers is VERY sketchy...originally jad 
-																						# Dict[str, str], but I have no guarantees at present of that being correct...
-def provide_multi_language_support(test_files: List[str], program: str, files: List[str], default_compilers: Dict[str, Any], debug: int, **other_parameters) -> List[str]:
+def provide_multi_language_support(test_files: List[str], program: str, files: List[str], default_compilers: Dict[str, List[List[str]]], debug: int, **other_parameters: Dict[str, Any]) -> List[List[str]]:
 	"""
 		provide backwards-compatible support of autotests which accept multiple languages
 		this needs to be generalized and incorporated in parameter_descriptions.py
@@ -308,11 +283,12 @@ def provide_multi_language_support(test_files: List[str], program: str, files: L
 		for (index, compiler) in enumerate(compilers):
 			compilers[index] = [program if a == '%' else str(a) for a in compiler]
 		return compilers
-	# just in case? Hoping this won't break anything...Could also return None...
+	# Just in case. If expected behaviour is None, can do that 
+	# with a slight tweak to mypy.ini
 	return []
 
 
-def run_support_command(command: List[str], result_cache:Dict[str, bool]={}, print_command: bool=False, file=sys.stdout, arguments: List[str]=[], unlink: str = None, debug: int = 0):
+def run_support_command(command: List[str], result_cache:Dict[str, bool]={}, print_command: bool=False, file=sys.stdout, arguments: List[str]=[], unlink: str = None, debug: int = 0) -> bool:
 	"""
 		run support command, shell used iff command is a string
 
@@ -373,7 +349,7 @@ def run_support_command(command: List[str], result_cache:Dict[str, bool]={}, pri
 	return result
 
 
-def generate_expected_output(tests: Dict[str, Test], global_parameters, args: Namespace, file=sys.stdout):
+def generate_expected_output(tests: Dict[str, Test], global_parameters: Dict[str, Any], args: Namespace, file=sys.stdout) -> None:
 	"""
 		generate expected output for tests from supplied solution
 	"""
@@ -402,13 +378,12 @@ def generate_expected_output(tests: Dict[str, Test], global_parameters, args: Na
 		with open(path, "w") as g:
 			g.write(new_contents)
 
-# file again presenting issues...
-def print_tests_and_expected_output(tests: Dict[str, Test], args: Namespace, file):
+def print_tests_and_expected_output(tests: Dict[str, Test], args: Namespace, file) -> None:
 	output_file_without_parameters(args.test_specification_pathname, initial_parameters=args.initial_parameters, initial_tests=args.initial_tests, debug=args.debug, file=file)
 	print_expected_output(tests, args, file)
 
 	
-def print_expected_output(tests: Dict[str, Test], args: Namespace, file):
+def print_expected_output(tests: Dict[str, Test], args: Namespace, file) -> None:
 	# ignore output from tests
 	with open(os.devnull, 'w') as dev_null:
 		for (label, test) in tests.items():
