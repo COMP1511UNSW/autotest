@@ -14,6 +14,7 @@ from run_test import Test
 from argparse import Namespace
 
 def run_tests(tests: Dict[str, Test], global_parameters: Dict[str, Any], args: Namespace, file = sys.stdout) -> int:
+	
 	debug = global_parameters['debug']
 	colored = termcolor_colored if global_parameters['colorize_output'] else lambda x,*a,**kw: x
 	if os.path.exists('./compile.sh'):
@@ -163,7 +164,7 @@ def run_checkers_pre_compile_command(test_files: List[str], parameters: Dict[str
 	return True
 
 
-def run_compilers(test_files: List[str], parameters, file=sys.stdout, debug: int = 0) -> bool:
+def run_compilers(test_files: List[str], parameters: Dict[str, Any], file=sys.stdout, debug: int = 0) -> bool:
 	"""
 		run any compilers specified for the the test
 		return False iff any compiler fails, True otherwise
@@ -196,7 +197,7 @@ def run_compilers(test_files: List[str], parameters, file=sys.stdout, debug: int
 	return True
 
 # TO-DO: make debug levels an enum, possibly implement better debugging
-def link_program(program: str, compile_command: List[str], test_files: List[str], linked_program:Dict[str, str]={}, debug: int=0) -> None:
+def link_program(program: str, compile_command: List[str], test_files: List[str], linked_program: Dict[str, str]={}, debug: int=0) -> None:
 	"""
 		link appropriate binary for test execution
 		linked_program is used to track current link to allows us to avoid some workxy
