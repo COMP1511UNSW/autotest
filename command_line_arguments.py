@@ -277,6 +277,6 @@ def repository_name(submission_name, account=None):
 	zid = get_zid(account)
 	if re.search(r'^lab', submission_name):
 		submission_name = 'labs'
-	import	course_configuration
+	import	course_configuration # type: ignore
 	c = course_configuration['course_code'].lower()
 	return "gitlab@gitlab.cse.unsw.EDU.AU:%s/%s-%s-%s" % (zid, course_configuration['unsw_session'], c, submission_name)
