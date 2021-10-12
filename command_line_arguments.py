@@ -192,21 +192,29 @@ def find_autotest_dir(exercise_directories, exercise, sub_pathnames, debug=0):
 	"""
 		search for a test specification file
 	"""
-	# for convenience massage name into several possibilities
-	names = [exercise]
+	
+	# for convenience massage exercise name into several possibilities
+	# so for example is exercises is specified as prime.c
+	# we try prime as an exercise name if prime.c doesn't exist
+	# similarly prime will be tried  if lab03_prime is the exercise name
+	
+	exercise_alternative_names = [exercise]
 	if '.' in exercise:
-		names.append(re.sub(r'\..*', '', exercise))
+		exercise_alternative_names.append(re.sub(r'\..*', '', exercise))
+
+	# should this code be generalized?
 	m = re.match(r'(\w+?\d{1,2}[ab]?_)(.*)', exercise)
 	if m:
-		names.append(re.sub(r'\..*', '', m.group(2)))
+		exercise_alternative_names.append(re.sub(r'\..*', '', m.group(2)))
+
 	m = re.match(r'(\w+\d{1,2}[ab]?_)(.*)', exercise)
 	if m:
-		names.append(re.sub(r'\..*', '', m.group(2)))
+		exercise_alternative_names.append(re.sub(r'\..*', '', m.group(2)))
 
 	for exercise_directory in exercise_directories:
-		for activity in names:
+		for possible_exercise_name in exercise_alternative_names:
 			for sub_pathname in sub_pathnames:
-				path = os.path.join(exercise_directory, exercise, sub_pathname)
+				path = os.path.join(exercise_directory, possible_exercise_name, sub_pathname)
 				if debug > 2:
 					print('looking for test specification in', path)
 				if os.path.exists(path):
