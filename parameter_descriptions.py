@@ -257,14 +257,54 @@ def finalize_compiler_checker_list(name,  compilers_or_checkers, parameters):
 	if not isinstance(compilers_or_checkers, list):
 		raise TestSpecificationError(f"invalid value for parameter '{name}': {compilers_or_checkers}")
 	program = parameters['program']						
-	for (index, compiler_or_checker) in enumerate(compilers_or_checkers):
-		if compiler_or_checker and isinstance(compiler_or_checker, list):
-			compilers_or_checkers[index] = [program if a == '%' else str(a) for a in compiler_or_checker]
-		elif not (compiler_or_checker and isinstance(compiler_or_checker, str)):
+	for (index, command) in enumerate(compilers_or_checkers):
+		if not command:
 			raise TestSpecificationError(f"invalid value for parameter '{name}': {compilers_or_checkers}")					
+		if isinstance(command, str):
+			continue					
+		if not isinstance(command, list):
+			raise TestSpecificationError(f"invalid value for parameter '{name}': {compilers_or_checkers}")
+
+		if isinstance(command[0], list):
+			command = select_command_from_alternatives(command)	
+			if not command:
+				raise TestSpecificationError(f"parameter '{name}' no alternative found: {compilers_or_checkers}")								
+		compilers_or_checkers[index] = [program if a == '%' else str(a) for a in command]
 	return compilers_or_checkers
 
+
+def select_command_from_alternatives(alternatives):
+	"""
+		given a list of alternative commands,
+		return first that exists in PATH
+		None is returned if no command can be found in $PATH
+	"""
+	for alternative in alternatives:
+		if not alternative:
+			return None					
+		if isinstance(alternative, str):
+			executable =  alternative.split()[0]
+		elif isinstance(alternative, list):
+			executable =  alternative[0]
+		else:
+			return None
+		if search_path(executable):
+			return alternative
+	return None
+
+
+def search_path(program):
+	"""
+		return first occurence of program as executable in $PATH
+		return NONE if not found in PATH
+	"""
+	for path in os.environ["PATH"].split(os.pathsep):
+		full_path = os.path.join(path, program)
+		if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
+			return full_path
+	return None
 	
+
 PARAMETER_LIST += [
 		
 		
@@ -296,7 +336,7 @@ PARAMETER_LIST += [
 	Parameter(
 		"default_compilers",
 		default = {
-			'c' : [['dcc', '-Wall']],
+			'c' : [[['dcc'], ['clang', '-Wall'], ['gcc', '-Wall']]],
 			'cc': [['g++', '-Wall']],
 			'java' : [['javac']],
 			'rs' : [['rustc']],
@@ -313,6 +353,18 @@ PARAMETER_LIST += [
 		description = """
 			List of compilers + arguments.<br>
 			**`files`** are compiled with each member of list and test is run once for each member of the list.<br>
+			For example, given:
+			```
+			# run all tests twice once compiled with gcc -fsanitize=address, once with clang -fsanitize=memory
+			compilers = [['gcc', '-fsanitize=address'], ['clang', '-fsanitize=memory']] 
+			```
+			Element of the list of compilers can themselves be a list specifying a list of alternative compilers.<br>
+			For example:
+			```
+			# run all tests twice once compiled with gcc -fsanitize=address, once with clang -fsanitize=memory
+			compilers = [[['dcc'], ['clang', '-Wall'], ['gcc', -Wall]]]
+			```
+			The first element of this sub-list where the compiler can be found in PATH is used.<br>
 			If compiler is a string it is run by passing it to a shell.<br>
 			Deprocated: if the value is a string containing ':' a list is formed by splitting the string at the ':'s.
 		""",

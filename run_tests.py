@@ -241,8 +241,8 @@ def chmod_program(program, chmod_cache={}, **other_parameters):
 	try:
 		os.chmod(program, 0o700)
 		chmod_cache[program] = True
-	except OSError:
-		# not clear what we shoud do here
+	except OSError as e:
+		# if program is produced by compilation, it won't exist
 		pass
 
 
