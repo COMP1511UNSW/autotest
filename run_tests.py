@@ -13,7 +13,9 @@ from collections.abc import Sequence
 from run_test import Test
 from argparse import Namespace
 
-def run_tests(tests: Dict[str, Test], global_parameters: Dict[str, Any], args: Namespace, file = sys.stdout) -> int:
+def run_tests(tests: Dict[str, Test], 
+	global_parameters: Dict[str, Any], 
+	args: Namespace, file = sys.stdout) -> int:
 	
 	debug = global_parameters['debug']
 	colored = termcolor_colored if global_parameters['colorize_output'] else lambda x,*a,**kw: x
@@ -55,7 +57,8 @@ def run_tests(tests: Dict[str, Test], global_parameters: Dict[str, Any], args: N
 	return 1 if n_tests_failed + n_tests_not_run else 0
 
 # TO-DO: provide stricter type for previous_errors
-def run_one_test(test: Test, args: Namespace, file=sys.stdout, previous_errors: Dict[str, Any]={}):
+def run_one_test(test: Test, args: Namespace, 
+	file=sys.stdout, previous_errors: Dict[str, Any]={}) -> int:
 	"""
 		return -1 for test not run, 0 for test failed, 1 for test passed
 	"""
@@ -142,7 +145,8 @@ def run_one_test(test: Test, args: Namespace, file=sys.stdout, previous_errors: 
 	
 	return 0
 
-def run_checkers_pre_compile_command(test_files: List[str], parameters: Dict[str, Any], file=sys.stdout) -> bool:
+def run_checkers_pre_compile_command(test_files: List[str], 
+	parameters: Dict[str, Any], file=sys.stdout) -> bool:
 	"""
 		run any checkers specified for the files in the test
 		plus any pre_compile_command
@@ -164,7 +168,8 @@ def run_checkers_pre_compile_command(test_files: List[str], parameters: Dict[str
 	return True
 
 
-def run_compilers(test_files: List[str], parameters: Dict[str, Any], file=sys.stdout, debug: int = 0) -> bool:
+def run_compilers(test_files: List[str], parameters: Dict[str, Any], 
+	file=sys.stdout, debug: int = 0) -> bool:
 	"""
 		run any compilers specified for the the test
 		return False iff any compiler fails, True otherwise
@@ -197,7 +202,9 @@ def run_compilers(test_files: List[str], parameters: Dict[str, Any], file=sys.st
 	return True
 
 # TO-DO: make debug levels an enum, possibly implement better debugging
-def link_program(program: str, compile_command: List[str], test_files: List[str], linked_program: Dict[str, str]={}, debug: int=0) -> None:
+def link_program(program: str, compile_command: List[str], 
+	test_files: List[str], linked_program: Dict[str, str]={}, 
+	debug: int=0) -> None:
 	"""
 		link appropriate binary for test execution
 		linked_program is used to track current link to allows us to avoid some workxy
@@ -231,7 +238,8 @@ def link_program(program: str, compile_command: List[str], test_files: List[str]
 		subprocess.call("echo after link command;ls -l", shell=True)
 
 
-def get_unique_program_name(program: str, compile_command: Union[List[str], str], test_files: List[str]) -> str:
+def get_unique_program_name(program: str, compile_command: Union[List[str], str], 
+	test_files: List[str]) -> str:
 	"""
 		form a unique program name based on compile arguments
 		so we can have multiple binaries for a program.
@@ -242,7 +250,8 @@ def get_unique_program_name(program: str, compile_command: Union[List[str], str]
 	return program + '.' + '__'.join([compile_command_str] + test_files).replace('/', '___')
 
 
-def chmod_program(program: str, chmod_cache: Dict[str, bool]={}, **other_parameters: Dict[str, Any]) -> None:
+def chmod_program(program: str, chmod_cache: Dict[str, bool]={}, 
+	**other_parameters: Dict[str, Any]) -> None:
 	chmod_str = "chmod " + program
 	if chmod_str in chmod_cache:
 		return
@@ -253,7 +262,9 @@ def chmod_program(program: str, chmod_cache: Dict[str, bool]={}, **other_paramet
 		# not clear what we should do here
 		pass
 
-def provide_multi_language_support(test_files: List[str], program: str, files: List[str], default_compilers: Dict[str, List[List[str]]], debug: int, **other_parameters: Dict[str, Any]) -> List[List[str]]:
+def provide_multi_language_support(test_files: List[str], program: str, files: List[str], 
+	default_compilers: Dict[str, List[List[str]]], debug: int, 
+	**other_parameters: Dict[str, Any]) -> List[List[str]]:
 	"""
 		provide backwards-compatible support of autotests which accept multiple languages
 		this needs to be generalized and incorporated in parameter_descriptions.py
@@ -289,7 +300,9 @@ def provide_multi_language_support(test_files: List[str], program: str, files: L
 	return []
 
 
-def run_support_command(command: List[str], result_cache:Dict[str, bool]={}, print_command: bool=False, file=sys.stdout, arguments: List[str]=[], unlink: str = None, debug: int = 0) -> bool:
+def run_support_command(command: List[str], result_cache:Dict[str, bool]={}, 
+	print_command: bool=False, file=sys.stdout, arguments: List[str]=[], 
+	unlink: str = None, debug: int = 0) -> bool:
 	"""
 		run support command, shell used iff command is a string
 
@@ -350,7 +363,8 @@ def run_support_command(command: List[str], result_cache:Dict[str, bool]={}, pri
 	return result
 
 
-def generate_expected_output(tests: Dict[str, Test], global_parameters: Dict[str, Any], args: Namespace, file=sys.stdout) -> None:
+def generate_expected_output(tests: Dict[str, Test], 
+	global_parameters: Dict[str, Any], args: Namespace, file=sys.stdout) -> None:
 	"""
 		generate expected output for tests from supplied solution
 	"""
