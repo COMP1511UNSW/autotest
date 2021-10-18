@@ -360,9 +360,7 @@ def chmod_program(
         pass
 
 
-def provide_multi_language_support(
-    test_files: List[str],
-    program: str,
+def provide_multi_language_support(test_files: List[str], program: str,
     files: List[str],
     default_compilers: Dict[str, List[List[str]]],
     debug: int,
