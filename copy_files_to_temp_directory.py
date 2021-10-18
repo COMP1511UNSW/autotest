@@ -13,7 +13,7 @@ def copy_files_to_temp_directory(args, parameters):
 	os.chdir(temp_dir)
 
 	# added for COMP1521 shell assignment but probably a good idea generally
-	os.environ['HOME'] = temp_dir
+	#os.environ['HOME'] = temp_dir
 
 	for expected_file in glob.glob('*.expected_*'):
 		os.chmod(expected_file, 0o400)

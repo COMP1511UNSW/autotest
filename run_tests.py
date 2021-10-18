@@ -258,9 +258,8 @@ def chmod_program(program: str, chmod_cache: Dict[str, bool]={},
 	try:
 		os.chmod(program, 0o700)
 		chmod_cache[program] = True
-	except OSError:
-		# not clear what we should do here
-		pass
+	except OSError as e:
+		# if program is produced by compilation, it won't exist
 
 def provide_multi_language_support(test_files: List[str], program: str, files: List[str], 
 	default_compilers: Dict[str, List[List[str]]], debug: int, 
