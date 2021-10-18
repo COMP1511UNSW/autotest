@@ -21,7 +21,7 @@ files=is_prime.c
 
 This project uses `pipenv` to manage requirements. You will need to install pipenv with `python3 -m pip install pipenv` and then fetch dependencies using `pipenv install`. 
 
-To run the script within the environment, it should be invoked using `pipenv run autotest.py`.
+To run the script within the environment, it should be invoked using `pipenv run python autotest.py`.
 
 ## Running Autotest
 
