@@ -260,6 +260,7 @@ def chmod_program(program: str, chmod_cache: Dict[str, bool]={},
 		chmod_cache[program] = True
 	except OSError as e:
 		# if program is produced by compilation, it won't exist
+		pass
 
 def provide_multi_language_support(test_files: List[str], program: str, files: List[str], 
 	default_compilers: Dict[str, List[List[str]]], debug: int, 
