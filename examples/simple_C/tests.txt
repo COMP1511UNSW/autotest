@@ -3,8 +3,8 @@ files=prime.c
 # specifying command-lines arguments
 test1  arguments=41  expected_stdout="41 is prime.\n"
 
-# specifying stdin
-test2  stdin="42"  expected_stdout="42 is not prime.\n"
+# specifying stdin - altered by Sam from original for testing
+test2  stdin=b"\x42"  expected_stdout="42 is not prime.\n"
 
 # using files to specify stdin and expected_stdout
 test3  stdin=['43.txt']  expected_stdout=['43_expected_output.txt']

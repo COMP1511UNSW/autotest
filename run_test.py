@@ -205,10 +205,18 @@ class Test():
 				self.long_explanation += bad_characters
 				self.parameters['show_diff'] = False
 			self.long_explanation += self.report_difference("output", self.expected_stdout, self.stdout)
+		
 		if self.stdout_ok and self.stderr_ok and self.file_not_ok:
 			self.long_explanation = self.report_difference(self.file_not_ok, self.file_expected,self.file_actual)
 		input = self.stdin
-		n_input_lines = input.count('\n')
+		
+		if self.parameters["unicode_stdin"] is True:
+			n_input_lines = input.count('\n')
+		else:
+			# TODO: add *proper* else case for non-unicode input
+			return """We're testing non-unicode input! This is a placeholder for when you use 
+				such input.\n"""
+		
 		if self.parameters['show_stdin']:
 			if input and n_input_lines < 32:
 				self.long_explanation += "\nThe input for this test was:\n%s\n" % colored(input, 'yellow')

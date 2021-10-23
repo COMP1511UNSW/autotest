@@ -120,7 +120,9 @@ def run_one_test(test, args, file=sys.stdout, previous_errors={}):
 		individual_test = failed_individual_tests[-1]
 	else:
 		individual_test = failed_individual_tests[0]
+	# ISSUE: this is throwing an exception...
 	long_explanation = individual_test.get_long_explanation()
+
 	#remove hexadecimal constants
 	reduced_long_explanation = re.sub(r'0x[0-9a-f]+', '', long_explanation, flags=re.I)
 	if reduced_long_explanation in previous_errors:
@@ -131,7 +133,6 @@ def run_one_test(test, args, file=sys.stdout, previous_errors={}):
 			#print(file=file)
 			print(long_explanation, flush=True, file=file, end='')
 		previous_errors.setdefault(reduced_long_explanation, label)
-	
 	return 0
 
 

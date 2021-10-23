@@ -500,7 +500,7 @@ PARAMETER_LIST += [
 
 ]
 
-
+# TODO: alter to include non-unicode input
 def finalize_stream(parameter_name, stream_contents, parameters):
 	"""
 		handle specifications of stdin, expected_stdin, expected_stdout 
@@ -510,14 +510,20 @@ def finalize_stream(parameter_name, stream_contents, parameters):
 		The deprocated parameters stdin_file, expected_stdin_file, expected_stdout_file are also handled.
 		As checking for a file named test_label.stdin etc
 	"""
+	print("made it to finalize_streams")
 	stream_name = parameter_name.replace('expected_', '')
 	deprocated_file_name = parameters.get(f'{parameter_name}_file', '')
 	if not stream_contents and deprocated_file_name:
+		print("so we know")
 		stream_contents = [deprocated_file_name]
+	print('y1')
 	if not stream_contents and "label" in parameters:
+		print('y2')
 		filename = f'{parameters["label"]}.{stream_name}'
 		if os.path.exists(os.path.join(parameters['supplied_files_directory'], filename)):
 			stream_contents = [filename]
+	print('y3')
+	print(stream_contents)
 	return interpolate_file(stream_contents, parameter_name, parameters)
 
 
@@ -526,15 +532,20 @@ def interpolate_file(e, parameter_name, parameters):
 		where a list of filenames is specified instead of a string
 		return a string formed from concatenating the files
 	"""
+	print("made it to interpolate_file")
 	if not e:
 		return ''
-	if isinstance(e, str):
+	# sam changed this lol
+	print("I'VE CHANGED THIS")
+	if isinstance(e, str) or isinstance(e, bytes):
 		return e
 	if not isinstance(e, list):
+		print("not sure if this error")
 		raise TestSpecificationError("invalid type for value in {parameter_name}")
 	contents = ''
 	for pathname in e:
 		if not isinstance(pathname, str):
+			print('or this error')
 			raise TestSpecificationError("invalid type for value in {parameter_name}")
 		contents += read_file(pathname, parameters)
 	return contents
@@ -558,6 +569,16 @@ PARAMETER_LIST += [
 			Bytes supplied on stdin for test.<br>
 			Deprocated: stdin is not specified and the file *test_label*`.stdin` exists, its contents are used.<br>
 			Not yet implemented: if value is a list it is treated as list of pathname of file(s) containing bytes.
+		"""),
+
+	# TODO: Ensure that this parameter always works
+	Parameter(
+		"unicode_stdin",
+		default = False,
+		show_in_documentation = False,
+		description = """
+			New parameter. Describes whether or not the stdin is unicode.
+			Default is true.
 		"""),
 
 		
@@ -1196,6 +1217,7 @@ def normalize_parameters(parameters, check_required_parameters_set=True, debug=0
 	try:
 		normalize_parameters1(parameters, check_required_parameters_set=check_required_parameters_set, debug=debug)
 	except TestSpecificationError as e:
+		print("the great exception")
 		raise TestSpecificationError(f"{error_prefix}: {e}")
 	except Exception as e:
 		raise TestSpecificationError(f"{error_prefix}: {e}")
@@ -1207,6 +1229,8 @@ def normalize_parameters1(parameters, check_required_parameters_set=True, debug=
 	coerce_parameter_types(parameters, debug=debug)
 	set_parameter_constant_defaults(parameters, debug=debug)
 	set_parameter_calculated_defaults(parameters, debug=debug)
+	print("ayyy")
+	# herein lies our error
 	finalize_parameters(parameters, debug=debug)
 	if check_required_parameters_set:
 		check_parameters_set(parameters, debug=debug)
