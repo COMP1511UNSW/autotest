@@ -25,14 +25,14 @@ def run_tests(tests, global_parameters, args, file=sys.stdout):
 			continue
 		result = run_one_test(test, args, file=file)
 		results.append(result)
-
+	
 	if debug > 3:
 		subprocess.call("echo after tests run;ls -l;pwd", shell=True)
 
 	n_tests_passed = results.count(1)
 	n_tests_failed = results.count(0)
 	n_tests_not_run = results.count(-1)
-
+	
 	if n_tests_passed:
 		print(colored(str(n_tests_passed) + ' tests passed', 'green'), end=' ', file=file)
 	else:
@@ -105,7 +105,7 @@ def run_one_test(test, args, file=sys.stdout, previous_errors={}):
 
 	if debug > 3:
 		subprocess.call("echo after for test run;ls -l", shell=True)
-
+	
 	failed_individual_tests = [it for it in individual_tests if not it.test_passed]
 	test.passed = not failed_individual_tests
 	test.stdout = individual_tests[0].stdout
@@ -113,16 +113,16 @@ def run_one_test(test, args, file=sys.stdout, previous_errors={}):
 	if test.passed:
 		print(colored("passed", 'green'), flush=True, file=file)
 		return 1
-
+	
 	# pick the best failed test to report
 	# if we have errors then should be more informative than incorrect output except memory leaks
 	if not failed_individual_tests[-1].stderr_ok and 'free not called' not in failed_individual_tests[-1].stderr:
 		individual_test = failed_individual_tests[-1]
 	else:
 		individual_test = failed_individual_tests[0]
-	# ISSUE: this is throwing an exception...
+	
 	long_explanation = individual_test.get_long_explanation()
-
+	
 	#remove hexadecimal constants
 	reduced_long_explanation = re.sub(r'0x[0-9a-f]+', '', long_explanation, flags=re.I)
 	if reduced_long_explanation in previous_errors:

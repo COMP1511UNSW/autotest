@@ -210,13 +210,13 @@ class Test():
 			self.long_explanation = self.report_difference(self.file_not_ok, self.file_expected,self.file_actual)
 		input = self.stdin
 		
-		if self.parameters["unicode_stdin"] is True:
+		if self.parameters["unicode_stdin"] is False:
 			n_input_lines = input.count('\n')
 		else:
 			# TODO: add *proper* else case for non-unicode input
 			return """We're testing non-unicode input! This is a placeholder for when you use 
 				such input.\n"""
-		
+				
 		if self.parameters['show_stdin']:
 			if input and n_input_lines < 32:
 				self.long_explanation += "\nThe input for this test was:\n%s\n" % colored(input, 'yellow')
