@@ -62,8 +62,17 @@ class Test():
 			# weird termination with non-zero exit status seen on some CSE servers
 			# ignore this execution and try again
 			time.sleep(1)
-		self.stdout = codecs.decode(stdout, 'UTF-8', errors='replace')
-		self.stderr = codecs.decode(stderr, 'UTF-8', errors='replace')
+		
+		if not self.parameters["unicode_stdout"]:
+			self.stdout = codecs.decode(stdout, 'UTF-8', errors='replace')
+		else:
+			self.stdout = stdout
+
+		if not self.parameters["unicode_stderr"]:
+			self.stderr = codecs.decode(stderr, 'UTF-8', errors='replace')
+		else:
+			self.stderr = stderr
+
 		self.short_explanation = None
 		self.long_explanation = None
 
@@ -104,6 +113,7 @@ class Test():
 				self.file_actual = actual_contents
 				return short_explanation
 
+	# TODO: implement unicode and non-unicode handling here...
 	def check_stream(self, actual, expected, name):
 		if self.debug:
 			print('name:', name)
@@ -131,6 +141,7 @@ class Test():
 			else:
 				return None
 
+	# TODO: get this to work with non-unicode input
 	def make_string_canonical(self, raw_str, keep_all_lines=False):
 		s = re.sub('\r\n?', '\n', raw_str)
 		filter = self.parameters.get('postprocess_output_command', None)
@@ -171,6 +182,7 @@ class Test():
 		path = re.sub('/tmp_amd/\w+/export/\w+/\d/(\w+)', r'/home/\1', path)
 		return path
 
+	# TODO: make this work better (and fully, as it is incomplete) with non-unicode IO
 	def get_long_explanation(self):
 		if self.debug: print('get_long_explanation() short_explanation=', self.short_explanation, 'long_explanation=', self.long_explanation, 'stderr_ok=', self.stderr_ok, 'expected_stderr=', self.expected_stderr)
 		if self.long_explanation:
@@ -200,12 +212,21 @@ class Test():
 					self.long_explanation = "Your program produced these errors:\n"
 					self.long_explanation += errors
 		if not self.stdout_ok and (self.parameters['show_stdout_if_errors'] or self.stderr_ok):
-			bad_characters = self.check_bad_characters(self.stdout, expected=self.expected_stdout)
+			# If we don't have unicode in out stdout, we should check for bad characters
+			bad_characters = False
+			if not self.parameters["unicode_stdout"]:
+				bad_characters = self.check_bad_characters(self.stdout, expected=self.expected_stdout)
 			if bad_characters:
 				self.long_explanation += bad_characters
 				self.parameters['show_diff'] = False
-			self.long_explanation += self.report_difference("output", self.expected_stdout, self.stdout)
-		
+			# report output differences in a easily readable manner 
+			# if we don't have unicode input.
+			# TODO: improve unicode handling
+			if not self.parameters["unicode_stdout"]:
+				self.long_explanation += self.report_difference("output", self.expected_stdout, self.stdout)
+			else:
+				self.long_explanation = f"You had {self.stdout} as stdout. You should have {self.expected_stdout}"
+
 		if self.stdout_ok and self.stderr_ok and self.file_not_ok:
 			self.long_explanation = self.report_difference(self.file_not_ok, self.file_expected,self.file_actual)
 		input = self.stdin
@@ -214,9 +235,10 @@ class Test():
 			n_input_lines = input.count('\n')
 		else:
 			# TODO: add *proper* else case for non-unicode input
-			return """We're testing non-unicode input! This is a placeholder for when you use 
-				such input.\n"""
-				
+			return self.long_explanation
+			# return """We're testing non-unicode input! This is a placeholder for when you use 
+			# 	such input.\n"""
+
 		if self.parameters['show_stdin']:
 			if input and n_input_lines < 32:
 				self.long_explanation += "\nThe input for this test was:\n%s\n" % colored(input, 'yellow')
@@ -249,6 +271,7 @@ class Test():
 			self.long_explanation += colored(command + '\n', 'blue')
 		return self.long_explanation
 
+	# TODO: make this work with non-unicode input
 	def report_difference(self, name, expected, actual):
 		if self.debug: print("report_difference(%s, '%s', '%s')" % (name, expected, actual))
 		canonical_expected = self.make_string_canonical(expected)

@@ -500,7 +500,7 @@ PARAMETER_LIST += [
 
 ]
 
-# TODO: alter to include non-unicode input
+# TODO: alter to include non-unicode input?
 def finalize_stream(parameter_name, stream_contents, parameters):
 	"""
 		handle specifications of stdin, expected_stdin, expected_stdout 
@@ -519,7 +519,7 @@ def finalize_stream(parameter_name, stream_contents, parameters):
 		filename = f'{parameters["label"]}.{stream_name}'
 		if os.path.exists(os.path.join(parameters['supplied_files_directory'], filename)):
 			stream_contents = [filename]
-
+	
 	return interpolate_file(stream_contents, parameter_name, parameters)
 
 
@@ -534,7 +534,11 @@ def interpolate_file(e, parameter_name, parameters):
 	if isinstance(e, str):
 		return e
 	if isinstance(e, bytes):
-		print("We have non-unicode...")
+		# TODO: automatically handle determining if parameter is non-unicode?
+		# This would place less responsibility on the test writer, 
+		# => a good change? Performance is always a concern,
+		# but frankly should be minimal. Still worth considering given
+		# program size.
 		return e
 	if not isinstance(e, list):
 		raise TestSpecificationError("invalid type for value in {parameter_name}")

@@ -102,7 +102,7 @@ def run_one_test(test, args, file=sys.stdout, previous_errors={}):
 		individual_tests.append(individual_test)
 		if not individual_test.stderr_ok and not parameters['allow_unexpected_stderr']:
 			break
-
+	
 	if debug > 3:
 		subprocess.call("echo after for test run;ls -l", shell=True)
 	
