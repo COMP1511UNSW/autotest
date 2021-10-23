@@ -75,7 +75,7 @@ class Test():
 
 		self.short_explanation = None
 		self.long_explanation = None
-
+		
 		stdout_short_explanation = self.check_stream(self.stdout, self.expected_stdout, "output")
 		if not self.parameters["allow_unexpected_stderr"] or stdout_short_explanation:
 			if self.parameters['dcc_output_checking'] and 'Execution stopped because' in self.stderr:
@@ -121,6 +121,18 @@ class Test():
 			print('expected:', expected[0:256] if expected else '')
 		if actual:
 			if expected:
+				# TODO: Make this better. May require new params.
+				# FIXME. 
+				# probably only need to check for bytearray; I've put both for completeness.
+				
+				# Handling non-unicode input
+				if type(actual) in (bytearray, bytes):
+					print(expected)
+					if actual == bytearray(expected):
+						return None 
+					else:
+						return "Your non-unicode output is not correct."
+				# handling unicode input
 				if self.compare_strings(actual, expected):
 					return None
 				else:
@@ -225,7 +237,8 @@ class Test():
 			if not self.parameters["unicode_stdout"]:
 				self.long_explanation += self.report_difference("output", self.expected_stdout, self.stdout)
 			else:
-				self.long_explanation = f"You had {self.stdout} as stdout. You should have {self.expected_stdout}"
+
+				self.long_explanation = f"You had {self.stdout} as stdout. You should have {self.expected_stdout}\n\n"
 
 		if self.stdout_ok and self.stderr_ok and self.file_not_ok:
 			self.long_explanation = self.report_difference(self.file_not_ok, self.file_expected,self.file_actual)
