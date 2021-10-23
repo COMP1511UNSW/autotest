@@ -19,9 +19,7 @@ def process_arguments():
 	(parser, args) = parse_arguments()
 
 	test_specification_pathname = find_test_specification(args)
-	print("hey1")
 	tests_as_dicts,parameters = parse_file(test_specification_pathname, initial_parameters=args.initial_parameters, initial_tests=args.initial_tests, debug=args.debug)
-	print("hey2")
 	tests = dict((label, Test(args.autotest_directory, **t)) for (label, t) in tests_as_dicts.items())
 	
 	if not tests:
