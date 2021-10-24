@@ -1,4 +1,6 @@
 __pycache__
+.mypy_cache
+.DS_Store
 a.out
 *.o
 core
