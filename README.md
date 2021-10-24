@@ -17,6 +17,12 @@ files=is_prime.c
 3 stdin="47" expected_stdout="47 is prime\n"
 ```
 
+## Installing requirements
+
+This project uses `pipenv` to manage requirements. You will need to install pipenv with `python3 -m pip install pipenv` and then fetch dependencies using `pipenv install`. 
+
+To run the script within the environment, it should be invoked using `pipenv run python autotest.py`.
+
 ## Running Autotest
 
 Autotest allows flexible specification of command line arguments, so it can be comfortable
