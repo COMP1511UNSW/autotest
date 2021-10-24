@@ -1,3 +1,5 @@
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
 Autotest runs a series of tests on 1 or more programs comparing their behaviour to specified expected behaviour.
 
 Autotest focuses on producing output comprehensible to a novice programmer
