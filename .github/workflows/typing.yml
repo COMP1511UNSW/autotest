@@ -35,4 +35,4 @@ jobs:
           pipenv install
 
       - name: Run mypy 
-        run: mypy --namespace-packages --explicit-package-bases *.py
+        run: pipenv run mypy --namespace-packages --explicit-package-bases *.py
