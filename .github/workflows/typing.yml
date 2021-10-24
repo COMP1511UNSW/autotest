@@ -34,5 +34,8 @@ jobs:
           python3 -m pip install pipenv
           pipenv install
 
+      - name: Install termcolor types
+        run: python3 -m pip install types-termcolor
+
       - name: Run mypy 
         run: pipenv run mypy --namespace-packages --explicit-package-bases *.py
