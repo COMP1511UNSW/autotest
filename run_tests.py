@@ -529,6 +529,7 @@ def print_tests_and_expected_output(
     )
     print_expected_output(tests, args, file)
 
+
 def print_expected_output(tests: Dict[str, Test], args: Namespace, file) -> None:
     # ignore output from tests
     with open(os.devnull, "w") as dev_null:
