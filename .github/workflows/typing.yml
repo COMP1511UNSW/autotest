@@ -31,8 +31,8 @@ jobs:
 
       - name: Install dependencies
         run: | 
-        python3 -m pip install pipenv
-        pipenv install
+          python3 -m pip install pipenv
+          pipenv install
 
       - name: Run mypy 
         run: mypy --namespace-packages --explicit-package-bases *.py
