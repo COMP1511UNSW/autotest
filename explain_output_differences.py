@@ -1,7 +1,11 @@
-# explain the differences between expect and actual output
-# in a way comprehensible to a novice programmer
-#
-# This code needs extensive rewriting
+"""Explain output differences.
+
+This module explains the differences between expect and actual output
+in a way comprehensible to a novice programmer.
+Todo:
+    * Docstrings need to be added
+    * This code needs extensive rewriting
+"""
 
 import difflib
 from termcolor import colored as termcolor_colored
