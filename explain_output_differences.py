@@ -32,7 +32,7 @@ def explain_output_differences(
     if canonical_expected and not actual:
         return colored("Your program produced no output\n", "red")
     if debug:
-        print("explain_output_differences(%s, '%s', '%s')" % (name, expected, actual))
+        print(f"explain_output_differences({name}, '{expected}', '{actual}')")
 
     # check if output is correct but just missing a character
     # but don't use this for short outputs
@@ -42,8 +42,7 @@ def explain_output_differences(
     ):
         missing_char = colored(repr(canonical_expected[-1]), "red")
         return (
-            "Your program's %s was correct except it was missing a %s character on the end.\n"
-            % (name, missing_char)
+            f"Your program's {name} was correct except it was missing a {missing_char} character on the end.\n"
         )
 
     # check if output is correct but has an extra character
@@ -66,8 +65,7 @@ def explain_output_differences(
                 "This can result from printing the EOF value returned by getchar.\n"
             )
         return (
-            "Your program's %s was correct except it had an extra %s character on the end.\n%s"
-            % (name, extra_char, suffix)
+            f"Your program's {name} was correct except it had an extra {extra_char} character on the end.\n{suffix}"
         )
     actual_line_color = defaultdict(lambda: "green")
     explanation = ""
@@ -79,18 +77,13 @@ def explain_output_differences(
     n_canonical_expected_lines = len(canonical_expected_lines)
 
     if n_actual_lines > 1:
-        actual_description = "Your program produced these %d lines of %s:\n" % (
-            n_actual_lines,
-            name,
-        )
+        actual_description = f"Your program produced these {n_actual_lines} lines of {name}:\n" 
     else:
-        actual_description = "Your program produced this line of %s:\n" % (name)
+        actual_description = "Your program produced this line of {name}:\n"
 
     if not expected and actual:
         explanation = colored(
-            "No {0} was expected for this test and your program produced {1} lines of {0}\n".format(
-                name, n_actual_lines
-            ),
+            f"No {name} was expected for this test and your program produced {n_actual_lines} lines of {name}\n",
             "red",
         )
         if show_actual_output:
@@ -109,8 +102,7 @@ def explain_output_differences(
         and sorted(canonical_expected_lines) == sorted(canonical_actual_lines)
     ):
         explanation += colored(
-            "\nYour program produced the correct %s lines but in the wrong order.\n"
-            % name,
+            f"\nYour program produced the correct {name} lines but in the wrong order.\n"
             "red",
         )
 
@@ -138,10 +130,7 @@ def explain_output_differences(
         if expected and actual and actual[-1] != "\n" and expected[-1] == "\n":
             explanation += "Last line of output above was not terminated with a newline('\\n') character\n"
         if show_expected_output and canonical_expected_lines:
-            explanation += "\nThe correct %d lines of %s for this test were:\n" % (
-                n_canonical_expected_lines,
-                name,
-            )
+            explanation += f"\nThe correct {n_canonical_expected_lines} lines of {name} for this test were:\n"
             explanation += colored(sanitize_string(expected, **parameters), "green")
 
     if not actual_lines or not show_diff:
@@ -166,7 +155,7 @@ def explain_output_differences(
                 else:
                     format = "all '%s' characters with '%s' characters."
                 explanation += (
-                    "\nYour program's %s would be correct if you replaced " % name
+                    f"\nYour program's {name} would be correct if you replaced "
                 )
                 explanation += format % (
                     colored(actual_char, "red"),
@@ -183,7 +172,7 @@ def explain_output_differences(
                 else:
                     format = "all '%s' characters."
                 explanation += (
-                    "Your program's %s would be correct if you removed " % name
+                    f"Your program's {name} would be correct if you removed "
                 )
                 explanation += format % (colored(actual_char, "red"))
                 explanation += "\n"
@@ -272,8 +261,8 @@ def create_diff(
     actual_line_number = 0
     diff = difflib.ndiff(canonical_actual_lines, canonical_expected_lines)
     diff_explanation = [
-        "The difference between your %s(%s) and the correct %s(%s) is:"
-        % (name, colored("-", "red"), name, colored("+", "green"))
+        f"The difference between your {name}({colored('-', 'red')})" +
+        f"and the correct {name}({colored('-', 'green')} is:"
     ]
     if prefix_removed:
         diff_explanation.append("...")
@@ -380,16 +369,16 @@ def sanitize_string(
             line = line[0:max_line_length_shown] + " ..."
         line = line.encode("unicode_escape").decode("ascii")
         if leave_colorization:
-            line = line.replace("\\x1b", "\x1b")  # yuk FIXME
+            line = line.replace(r"\x1b", "\x1b")
         if leave_tabs:
-            line = line.replace("\\t", "\t")  # yuk FIXME
-            line = line.replace("\\\\", "\\")  # yuk FIXME
+            line = line.replace(r"\t", "\t")
+            line = line.replace(r"\\", "\\")
         color = line_color[line_number]
         if color:
             line = termcolor_colored(line, color)
         sanitized_lines.append(line)
     if append_repeat_message:
-        repeat_message = "<last line repeated %d times>" % repeats
+        repeat_message = f"<last line repeated {repeats} times>"
         if parameters["colorize_output"]:
             repeat_message = termcolor_colored(repeat_message, "red")
         sanitized_lines.append(repeat_message)
