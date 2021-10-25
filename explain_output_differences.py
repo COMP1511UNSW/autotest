@@ -22,7 +22,7 @@ def explain_output_differences(
     max_lines_shown=32,
     max_line_length_shown=1024,
     debug=False,
-    **parameters
+    **parameters,
 ):
     max_lines_shown = int(max_lines_shown)
     max_line_length_shown = int(max_line_length_shown)
@@ -41,9 +41,7 @@ def explain_output_differences(
         or (canonical_actual and canonical_actual[-1] in ". \n")
     ):
         missing_char = colored(repr(canonical_expected[-1]), "red")
-        return (
-            f"Your program's {name} was correct except it was missing a {missing_char} character on the end.\n"
-        )
+        return f"Your program's {name} was correct except it was missing a {missing_char} character on the end.\n"
 
     # check if output is correct but has an extra character
     # but don't use this for short outputs
@@ -64,9 +62,7 @@ def explain_output_differences(
             suffix = (
                 "This can result from printing the EOF value returned by getchar.\n"
             )
-        return (
-            f"Your program's {name} was correct except it had an extra {extra_char} character on the end.\n{suffix}"
-        )
+        return f"Your program's {name} was correct except it had an extra {extra_char} character on the end.\n{suffix}"
     actual_line_color = defaultdict(lambda: "green")
     explanation = ""
     actual_lines = actual.splitlines()
@@ -77,7 +73,9 @@ def explain_output_differences(
     n_canonical_expected_lines = len(canonical_expected_lines)
 
     if n_actual_lines > 1:
-        actual_description = f"Your program produced these {n_actual_lines} lines of {name}:\n" 
+        actual_description = (
+            f"Your program produced these {n_actual_lines} lines of {name}:\n"
+        )
     else:
         actual_description = "Your program produced this line of {name}:\n"
 
@@ -93,7 +91,7 @@ def explain_output_differences(
                 line_color=defaultdict(
                     lambda: "red" if parameters["colorize_output"] else ""
                 ),
-                **parameters
+                **parameters,
             )
         return explanation
     if (
@@ -171,9 +169,7 @@ def explain_output_differences(
                     format = "a '%s' character."
                 else:
                     format = "all '%s' characters."
-                explanation += (
-                    f"Your program's {name} would be correct if you removed "
-                )
+                explanation += f"Your program's {name} would be correct if you removed "
                 explanation += format % (colored(actual_char, "red"))
                 explanation += "\n"
                 return explanation
@@ -261,8 +257,8 @@ def create_diff(
     actual_line_number = 0
     diff = difflib.ndiff(canonical_actual_lines, canonical_expected_lines)
     diff_explanation = [
-        f"The difference between your {name}({colored('-', 'red')})" +
-        f"and the correct {name}({colored('-', 'green')} is:"
+        f"The difference between your {name}({colored('-', 'red')})"
+        + f"and the correct {name}({colored('-', 'green')} is:"
     ]
     if prefix_removed:
         diff_explanation.append("...")
@@ -342,7 +338,7 @@ def sanitize_string(
     max_lines_shown=32,
     max_line_length_shown=1024,
     line_color=defaultdict(lambda: ""),
-    **parameters
+    **parameters,
 ):
     max_lines_shown = int(max_lines_shown)
     max_line_length_shown = int(max_line_length_shown)
