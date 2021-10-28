@@ -88,5 +88,3 @@ class TestStandard:
         if not re.search(" tests passed 0 tests failed *$", p.stdout):
             print(p.stdout)
             assert False
-
-    
