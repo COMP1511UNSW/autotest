@@ -47,9 +47,9 @@ class Test():
 	def run_test(self, compile_command=''):
 		if self.debug > 1:
 			print(f'run_test(compile_command="{compile_command}", command="{self.command}")\n')
-
+		
 		self.set_environ()
-
+		
 		for attempt in range(3):
 			if self.debug > 1:
 				print('run_test attempt', attempt)
@@ -62,7 +62,7 @@ class Test():
 			# weird termination with non-zero exit status seen on some CSE servers
 			# ignore this execution and try again
 			time.sleep(1)
-		
+			# ignore this execution and try again
 		if not self.parameters["unicode_stdout"]:
 			self.stdout = codecs.decode(stdout, 'UTF-8', errors='replace')
 		else:
@@ -75,7 +75,7 @@ class Test():
 
 		self.short_explanation = None
 		self.long_explanation = None
-		
+
 		stdout_short_explanation = self.check_stream(self.stdout, self.expected_stdout, "output")
 		if not self.parameters["allow_unexpected_stderr"] or stdout_short_explanation:
 			if self.parameters['dcc_output_checking'] and 'Execution stopped because' in self.stderr:
@@ -125,9 +125,8 @@ class Test():
 				# FIXME. 
 				# probably only need to check for bytearray; I've put both for completeness.
 				
-				# Handling non-unicode input
-				if type(actual) in (bytearray, bytes):
-					print(expected)
+				# Handling non-unicode IO
+				if type(actual) in (bytearray, bytes) or type(expected) in (bytearray, bytes):
 					if actual == bytearray(expected):
 						return None 
 					else:
@@ -237,9 +236,8 @@ class Test():
 			if not self.parameters["unicode_stdout"]:
 				self.long_explanation += self.report_difference("output", self.expected_stdout, self.stdout)
 			else:
-
 				self.long_explanation = f"You had {self.stdout} as stdout. You should have {self.expected_stdout}\n\n"
-
+		
 		if self.stdout_ok and self.stderr_ok and self.file_not_ok:
 			self.long_explanation = self.report_difference(self.file_not_ok, self.file_expected,self.file_actual)
 		input = self.stdin

@@ -60,7 +60,7 @@ def run_one_test(test, args, file=sys.stdout, previous_errors={}):
 
 	glob_lists = [glob.glob(g) for g in test.files]
 	test_files = [item for sublist in glob_lists for item in sublist]
-
+	
 	if not run_checkers_pre_compile_command(test_files, parameters, file=file):
 		print(not_run_description, 'because', colored("check failed", 'red'), flush=True, file=file)
 		return -1
@@ -69,14 +69,14 @@ def run_one_test(test, args, file=sys.stdout, previous_errors={}):
 	if missing_files:
 		print(not_run_description, "because these files are missing:" , colored(" ".join(missing_files), 'red'), flush=True, file=file)
 		return -1
-
+	
 	if not run_compilers(test_files, parameters, file=file):
 		print(not_run_description, 'because', colored("compilation failed", 'red'), flush=True, file=file)
 		return -1
 
 	if debug > 3:
 		subprocess.call("echo after run_compilers;ls -l", shell=True)
-
+	
 	chmod_program(**parameters)
 	
 	print(description, end='', file=file)
@@ -86,7 +86,7 @@ def run_one_test(test, args, file=sys.stdout, previous_errors={}):
 
 		if compile_command:
 			link_program(parameters['program'], compile_command, test_files, debug=debug)
-
+		
 		if parameters['setup_command']:
 			run_support_command(test.parameters['setup_command'], result_cache={}, debug=test.parameters['debug'])
 		individual_test = copy.copy(test)
@@ -97,12 +97,10 @@ def run_one_test(test, args, file=sys.stdout, previous_errors={}):
 			compile_command_str = ' '.join(compile_command + test_files)
 		else:	
 			compile_command_str = compile_command + ' ' + ' '.join(test_files)
-
 		individual_test.run_test(compile_command=compile_command_str)
 		individual_tests.append(individual_test)
 		if not individual_test.stderr_ok and not parameters['allow_unexpected_stderr']:
 			break
-	
 	if debug > 3:
 		subprocess.call("echo after for test run;ls -l", shell=True)
 	
@@ -113,19 +111,18 @@ def run_one_test(test, args, file=sys.stdout, previous_errors={}):
 	if test.passed:
 		print(colored("passed", 'green'), flush=True, file=file)
 		return 1
-	
+
 	# pick the best failed test to report
 	# if we have errors then should be more informative than incorrect output except memory leaks
 	if not failed_individual_tests[-1].stderr_ok and 'free not called' not in failed_individual_tests[-1].stderr:
 		individual_test = failed_individual_tests[-1]
 	else:
 		individual_test = failed_individual_tests[0]
-	
 	long_explanation = individual_test.get_long_explanation()
-	
+
 	#remove hexadecimal constants
 	reduced_long_explanation = re.sub(r'0x[0-9a-f]+', '', long_explanation, flags=re.I)
-	if reduced_long_explanation in previous_errors:
+	if reduced_long_explanation in previous_errors:	
 		print(colored("failed", 'red'), "({} - same as Test {})".format(individual_test.short_explanation, previous_errors[reduced_long_explanation]), flush=True, file=file)
 	else:
 		print(colored("failed", 'red'), "(%s)" % individual_test.short_explanation, file=file)
@@ -384,9 +381,8 @@ def print_expected_output(tests, args, file):
 			run_one_test(test, args, file=dev_null)
 			if not hasattr(test, 'stdout'):
 				die(f"Test {label} could not be run")
-			if test.stdout:
+			if test.stdout:				
 				print(f'{label} expected_stdout={repr(test.stdout)}', file=file) 	
 			if test.stderr:
 				print(f'{label} expected_stdout={repr(test.stderr)}', file=file) 	
-
 

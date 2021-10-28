@@ -17,6 +17,7 @@ def run(command, **parameters):
 	else:
 		loop = asyncio.get_event_loop()
 	try:
+		print("we hereeeeeeeeeee")
 		cooroutine = run_coroutine(loop, command, **parameters)
 		output = loop.run_until_complete(cooroutine)
 	except KeyboardInterrupt:
@@ -45,7 +46,7 @@ def run_coroutine(loop, command,
 				nice=0,
 				**parameters):
 	exit_future = asyncio.Future(loop=loop)
-
+	
 	def set_rlimit(which, limit):
 		try:
 			# having soft limit < hard limit necessary to produce nice message from SIGXCPU
@@ -82,9 +83,10 @@ def run_coroutine(loop, command,
 
 		if nice != 0:
 			os.nice(nice)
+	
 	# Create the subprocess
 	command = ["/bin/sh", '-c', command] if isinstance(command, str) else command
-
+	
 	# subtle issue with providing string as input so just write it to a temporary file
 	if stdin:
 		stdin_stream = tempfile.TemporaryFile()
@@ -93,7 +95,6 @@ def run_coroutine(loop, command,
 			stdin_stream.write(stdin.encode(locale.getpreferredencoding(False)))
 		else:
 			stdin_stream.write(stdin)
-
 		stdin_stream.seek(0)
 	else:
 		stdin_stream = subprocess.DEVNULL
