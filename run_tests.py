@@ -275,7 +275,7 @@ def run_compilers(
     return True
 
 
-# TO-DO: make debug levels an enum, possibly implement better debugging
+# TODO: make debug levels an enum, possibly implement better debugging
 def link_program(
     program: str,
     compile_command: List[str],
