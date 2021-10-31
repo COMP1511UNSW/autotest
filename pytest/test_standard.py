@@ -177,7 +177,7 @@ class TestStandard:
 
     # TODO: test show_parameters here — not currently working
     def test_show_parameters(self):
-        test_folder = "../tests/show-parameters"
+        test_folder = "../tests/show_parameters"
         p = subprocess.run(
             args=["../autotest.py", "-D", test_folder, "-a", f"{test_folder}/autotest"],
             stdout=subprocess.PIPE,
