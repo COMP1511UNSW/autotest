@@ -175,7 +175,6 @@ class TestStandard:
             print(p.stdout)
             assert False
 
-    # TODO: test show_parameters here — not currently working
     def test_show_parameters(self):
         test_folder = "../tests/show_parameters"
         p = subprocess.run(
