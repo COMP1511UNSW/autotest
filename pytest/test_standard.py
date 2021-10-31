@@ -93,9 +93,14 @@ class TestStandard:
     def test_limits(self):
         test_folder = "../tests/limits"
         p = subprocess.run(
-            args=["../autotest.py", "-D", test_folder, "-a", f"{test_folder}/autotest",
-                "--parameters", 
-                "ignore_blank_lines=1\nignore_case=1\ncompare_only_characters=abcdefghijklmnopqrstuvwxyz"
+            args=[
+                "../autotest.py",
+                "-D",
+                test_folder,
+                "-a",
+                f"{test_folder}/autotest",
+                "--parameters",
+                "ignore_blank_lines=1\nignore_case=1\ncompare_only_characters=abcdefghijklmnopqrstuvwxyz",
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -105,35 +110,50 @@ class TestStandard:
         # Do a series of greps to find if we have the correct output.
         # Yes, this feels very brittle. No, I don't have a better solution.
         # More greps could be added to ensure that this is more effective.
-        success = True 
-        if not re.search("Test max_open_files_should_pass \(/bin/true\) - passed", p.stdout):
+        success = True
+        if not re.search(
+            "Test max_open_files_should_pass \(/bin/true\) - passed", p.stdout
+        ):
             print("hi")
             success = False
-        if not re.search("Test max_open_files_should_fail \('/bin/true 3>3 4>4 5>5 6>6 7>7 8>8'\) - failed \(errors\)", p.stdout):
+        if not re.search(
+            "Test max_open_files_should_fail \('/bin/true 3>3 4>4 5>5 6>6 7>7 8>8'\) - failed \(errors\)",
+            p.stdout,
+        ):
             print("hi2")
             success = False
-        if not re.search("Test max_cpu_seconds_should_fail \('while true; do :; done'\) - failed \(errors\)", p.stdout):
+        if not re.search(
+            "Test max_cpu_seconds_should_fail \('while true; do :; done'\) - failed \(errors\)",
+            p.stdout,
+        ):
             print("h3")
             success = False
-        if not re.search("Test max_file_size_bytes_should_fail \('yes >out'\) - failed \(errors\)", p.stdout):
+        if not re.search(
+            "Test max_file_size_bytes_should_fail \('yes >out'\) - failed \(errors\)",
+            p.stdout,
+        ):
             print("hi4")
-            success = False 
-        if not re.search("Test max_stdout_bytes_should_fail \(yes\) - failed \(errors\)", p.stdout):
+            success = False
+        if not re.search(
+            "Test max_stdout_bytes_should_fail \(yes\) - failed \(errors\)", p.stdout
+        ):
             print("hi4")
-            success = False 
-        if not re.search("Test max_stderr_bytes_should_fail \('yes 1>&2'\) - failed \(errors\)", p.stdout):
+            success = False
+        if not re.search(
+            "Test max_stderr_bytes_should_fail \('yes 1>&2'\) - failed \(errors\)",
+            p.stdout,
+        ):
             print("hi5")
-            success = False 
+            success = False
         if not re.search("1 tests passed 5 tests failed", p.stdout):
             print("hi6")
-            success = False 
+            success = False
 
         if success is False:
-            #print(p.stdout)
+            # print(p.stdout)
             pass
 
         assert success
-        
 
     # TODO: test multi-file-simple here — not currently working
     def test_multi_file_simple(self):
