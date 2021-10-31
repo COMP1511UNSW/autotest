@@ -1,5 +1,9 @@
 name: auto-blacken
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+    branches:
+    - main
 jobs:
   linter_name:
     name: runner / black
