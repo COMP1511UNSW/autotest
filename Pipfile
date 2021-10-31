@@ -9,6 +9,7 @@ requests = "*"
 
 [dev-packages]
 black = "*"
+pytest = "*"
 
 [requires]
 python_version = "3.9"
@@ -17,4 +18,4 @@ python_version = "3.9"
 allow_prereleases = true
 
 [scripts]
-test = "python -m pytest"
+test = "pytest"
