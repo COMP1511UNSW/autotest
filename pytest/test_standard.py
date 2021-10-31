@@ -146,7 +146,6 @@ class TestStandard:
         assert success
 
     def test_multi_file_simple(self):
-        return
         test_folder = "../tests/multi-file-simple"
         p = subprocess.run(
             args=["../autotest.py", "-D", test_folder, "-a", f"{test_folder}/autotest"],
