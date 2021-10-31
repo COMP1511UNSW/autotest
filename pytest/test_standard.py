@@ -17,6 +17,7 @@ class TestStandard:
             print(p.stdout)
             assert False
 
+    # TODO: fixme
     # this one is a top level one (this is broken because glob things)
     def test_checker(self):
         return
@@ -28,7 +29,7 @@ class TestStandard:
             timeout=10,
             encoding="utf-8",
         )
-        if not re.sedarch(" tests passed 0 tests failed *$", p.stdout):
+        if not re.search(" tests passed 0 tests failed *$", p.stdout):
             print(p.stdout)
             assert False
 
@@ -103,7 +104,20 @@ class TestStandard:
             print(p.stdout)
             assert False
 
-    # TODO: test multi-file-simple here
+    # TODO: test multi-file-simple here — not currently working
+    def test_multi_file_simple(self):
+        test_folder = "../tests/multi-file-simple"
+        p = subprocess.run(
+            args=["../autotest.py", "-D", test_folder, "-a", f"{test_folder}/autotest"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=10,
+            encoding="utf-8",
+        )
+        expected_output = "b\n"
+        if p.stdout != expected_output:
+            print(p.stdout)
+            assert False
 
     def test_shell(self):
         test_folder = "../tests/shell"
@@ -118,4 +132,19 @@ class TestStandard:
             print(p.stdout)
             assert False
 
-    # TODO: test show_parameters here
+    # TODO: test show_parameters here — not currently working
+    def test_show_parameters(self):
+        test_folder = "../tests/show-parameters"
+        p = subprocess.run(
+            args=["../autotest.py", "-D", test_folder, "-a", f"{test_folder}/autotest"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=10,
+            encoding="utf-8",
+        )
+        expected_output = "bash -n echo.sh\necho fake compile command echo.sh\nfake compile command echo.sh\nTest check_everything_shown (sample description) - failed (Incorrect output)\nYour program produced this line of output:\nhello\n\nThe correct 1 lines of output for this test were:\nworld\n\nThe difference between your output(-) and the correct output(+) is:\n- hello\n+ world\n\nThe input for this test was:\nsample input\nYou can reproduce this test by executing these commands:\n  echo fake compile command echo.sh\n  echo -n 'sample input' | echo.sh hello\nTest check_actual_output_not_shown (sample description) - failed (Incorrect output)\nYour program produced this line of output:\nhello\n\nThe correct 1 lines of output for this test were:\nworld\n\nThe difference between your output(-) and the correct output(+) is:\n- hello\n+ world\nYou can reproduce this test by executing these commands:\n  echo fake compile command echo.sh\n  echo -n 'sample input' | echo.sh hello\nTest check_expected_output_not_shown (sample description) - failed (Incorrect output)\n\nThe difference between your output(-) and the correct output(+) is:\n- hello\n+ world\nYou can reproduce this test by executing these commands:\n  echo fake compile command echo.sh\n  echo -n 'sample input' | echo.sh hello\nTest check_diff_not_shown (sample description) - failed (Incorrect output)\nYou can reproduce this test by executing these commands:\n  echo fake compile command echo.sh\n  echo -n 'sample input' | echo.sh hello\nTest check_reproduce_command_not_shown (sample description) - failed (Incorrect output)\nnew fake compile command echo.sh\nTest check_compile_command_not_shown (sample description) - failed (Incorrect output - same as Test check_reproduce_command_not_shown)\n0 tests passed 6 tests failed\n"
+        assert_f = True
+        if p.stdout != expected_output:
+            print(p.stdout)
+            assert_f = False
+        assert assert_f
