@@ -17,19 +17,17 @@ class TestStandard:
             print(p.stdout)
             assert False
 
-    # TODO: fixme
-    # this one is a top level one (this is broken because glob things)
     def test_checker(self):
-        return
         test_folder = "../tests/checker"
         p = subprocess.run(
-            args=["../autotest.py", "-D", test_folder, "-a", test_folder],
+            args=["../autotest.py", "-D", test_folder, "-a", f"{test_folder}/autotest"],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=10,
             encoding="utf-8",
         )
-        if not re.search(r" tests passed 0 tests failed *$", p.stdout):
+        expected_stdout = "bash -n hello.sh\nTest 0 (hello.sh) - passed\nchecker.sh hello.sh\nchecker.sh hello.sh\npre_compile autotest checker.sh hello.sh pre_compile.sh tests.txt\nTest 1 (hello.sh) - could not be run because check failed\n1 tests passed 0 tests failed  1 tests could not be run\n"
+        if p.stdout != expected_stdout:
             print(p.stdout)
             assert False
 
