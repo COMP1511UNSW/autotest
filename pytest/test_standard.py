@@ -110,48 +110,24 @@ class TestStandard:
         # Do a series of greps to find if we have the correct output.
         # Yes, this feels very brittle. No, I don't have a better solution.
         # More greps could be added to ensure that this is more effective.
-        success = True
-        if not re.search(
-            "Test max_open_files_should_pass \(/bin/true\) - passed", p.stdout
-        ):
-            print("hi")
+        success = True 
+        if not re.search("Test max_open_files_should_pass \(/bin/true\) - passed", p.stdout):
             success = False
-        if not re.search(
-            "Test max_open_files_should_fail \('/bin/true 3>3 4>4 5>5 6>6 7>7 8>8'\) - failed \(errors\)",
-            p.stdout,
-        ):
-            print("hi2")
+        if not re.search("Test max_open_files_should_fail \('/bin/true 3>3 4>4 5>5 6>6 7>7 8>8'\) - failed \(errors\)", p.stdout):
             success = False
-        if not re.search(
-            "Test max_cpu_seconds_should_fail \('while true; do :; done'\) - failed \(errors\)",
-            p.stdout,
-        ):
-            print("h3")
+        if not re.search("Test max_cpu_seconds_should_fail \('while true; do :; done'\) - failed \(errors\)", p.stdout):
             success = False
-        if not re.search(
-            "Test max_file_size_bytes_should_fail \('yes >out'\) - failed \(errors\)",
-            p.stdout,
-        ):
-            print("hi4")
-            success = False
-        if not re.search(
-            "Test max_stdout_bytes_should_fail \(yes\) - failed \(errors\)", p.stdout
-        ):
-            print("hi4")
-            success = False
-        if not re.search(
-            "Test max_stderr_bytes_should_fail \('yes 1>&2'\) - failed \(errors\)",
-            p.stdout,
-        ):
-            print("hi5")
-            success = False
+        if not re.search("Test max_file_size_bytes_should_fail \('yes >out'\) - failed \(errors\)", p.stdout):
+            success = False 
+        if not re.search("Test max_stdout_bytes_should_fail \(yes\) - failed \(errors\)", p.stdout):
+            success = False 
+        if not re.search("Test max_stderr_bytes_should_fail \('yes 1>&2'\) - failed \(errors\)", p.stdout):
+            success = False 
         if not re.search("1 tests passed 5 tests failed", p.stdout):
-            print("hi6")
-            success = False
+            success = False 
 
         if success is False:
-            # print(p.stdout)
-            pass
+            print(p.stdout)
 
         assert success
 
