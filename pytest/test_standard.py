@@ -1,13 +1,22 @@
 import pytest
 import subprocess
 import re
+import sys
 
 # created from at's original test script (yes this script needs to be thrown into a fire)
+# don't forget to add `sys.exectuable` for every subprocess call to ensure same python interpreter is used
 class TestStandard:
     def test_arguments(self):
         test_folder = "tests/arguments"
         p = subprocess.run(
-            args=["./autotest.py", "-D", test_folder, "-a", f"{test_folder}/autotest"],
+            args=[
+                sys.executable,
+                "./autotest.py",
+                "-D",
+                test_folder,
+                "-a",
+                f"{test_folder}/autotest",
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=10,
@@ -20,7 +29,14 @@ class TestStandard:
     def test_checker(self):
         test_folder = "tests/checker"
         p = subprocess.run(
-            args=["./autotest.py", "-D", test_folder, "-a", f"{test_folder}/autotest"],
+            args=[
+                sys.executable,
+                "./autotest.py",
+                "-D",
+                test_folder,
+                "-a",
+                f"{test_folder}/autotest",
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=10,
@@ -36,7 +52,14 @@ class TestStandard:
             "SAMPLE_ENVIRONMENT_VARIABLE": "sample_value"
         }  # this is cursed but it's necessary
         p = subprocess.run(
-            args=["./autotest.py", "-D", test_folder, "-a", f"{test_folder}/autotest"],
+            args=[
+                sys.executable,
+                "./autotest.py",
+                "-D",
+                test_folder,
+                "-a",
+                f"{test_folder}/autotest",
+            ],
             env=test_env,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -50,7 +73,14 @@ class TestStandard:
     def test_expected_output(self):
         test_folder = "tests/expected_output"
         p = subprocess.run(
-            args=["./autotest.py", "-D", test_folder, "-a", f"{test_folder}/autotest"],
+            args=[
+                sys.executable,
+                "./autotest.py",
+                "-D",
+                test_folder,
+                "-a",
+                f"{test_folder}/autotest",
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=10,
@@ -63,7 +93,14 @@ class TestStandard:
     def test_f_strings(self):
         test_folder = "tests/f-strings"
         p = subprocess.run(
-            args=["./autotest.py", "-D", test_folder, "-a", f"{test_folder}/autotest"],
+            args=[
+                sys.executable,
+                "./autotest.py",
+                "-D",
+                test_folder,
+                "-a",
+                f"{test_folder}/autotest",
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=10,
@@ -76,7 +113,14 @@ class TestStandard:
     def test_ignore(self):
         test_folder = "tests/ignore"
         p = subprocess.run(
-            args=["./autotest.py", "-D", test_folder, "-a", f"{test_folder}/autotest"],
+            args=[
+                sys.executable,
+                "./autotest.py",
+                "-D",
+                test_folder,
+                "-a",
+                f"{test_folder}/autotest",
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=10,
@@ -90,6 +134,7 @@ class TestStandard:
         test_folder = "tests/limits"
         p = subprocess.run(
             args=[
+                sys.executable,
                 "./autotest.py",
                 "-D",
                 test_folder,
@@ -146,7 +191,14 @@ class TestStandard:
     def test_multi_file_simple(self):
         test_folder = "tests/multi-file-simple"
         p = subprocess.run(
-            args=["./autotest.py", "-D", test_folder, "-a", f"{test_folder}/autotest"],
+            args=[
+                sys.executable,
+                "./autotest.py",
+                "-D",
+                test_folder,
+                "-a",
+                f"{test_folder}/autotest",
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=10,
@@ -159,7 +211,14 @@ class TestStandard:
     def test_shell(self):
         test_folder = "tests/shell"
         p = subprocess.run(
-            args=["./autotest.py", "-D", test_folder, "-a", f"{test_folder}/autotest"],
+            args=[
+                sys.executable,
+                "./autotest.py",
+                "-D",
+                test_folder,
+                "-a",
+                f"{test_folder}/autotest",
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=10,
@@ -172,7 +231,14 @@ class TestStandard:
     def test_show_parameters(self):
         test_folder = "tests/show_parameters"
         p = subprocess.run(
-            args=["./autotest.py", "-D", test_folder, "-a", f"{test_folder}/autotest"],
+            args=[
+                sys.executable,
+                "./autotest.py",
+                "-D",
+                test_folder,
+                "-a",
+                f"{test_folder}/autotest",
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=10,
