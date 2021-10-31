@@ -1,4 +1,4 @@
-name: auto-blacken
+name: auto-pytest
 on: [push, pull_request]
 jobs:
   # job skipper in the case of concurrent push + pull_request trigger
@@ -13,9 +13,9 @@ jobs:
           concurrent_skipping: 'same_content'
           do_not_skip: '["push"]'
 
-  # actual autoblacken
+  # actual auto pytest
   main_job:
-    name: runner / black
+    name: pytest
     needs: pre_job
     if: ${{needs.pre_job.outputs.should_skip != 'true'}}
     runs-on: ubuntu-latest
@@ -29,15 +29,28 @@ jobs:
         if: github.event_name == 'push'
         with:
           fetch-depth: 0
-      - name: Check files using the black formatter
-        uses: rickstaa/action-black@v1
-        id: action_black
+
+      - name: Setup Python
+        uses: actions/setup-python@v2
         with:
-          black_args: "."
-      - name: Create commit on changes
-        if: steps.action_black.outputs.is_formatted == 'true'
+          python-version: 3.9
+          architecture: x64
+
+      - name: Install pipenv
         run: |
-          git config --global user.name '${{github.actor}}'
-          git config --global user.email '${{github.actor}}@users.noreply.github.com'
-          git commit -am ":art: Format Python code with psf/black" -m "There appear to be some python formatting errors in ${{github.sha}}."
-          git push
+          python -m pip install --upgrade pipenv wheel
+
+      - id: cache-pipenv
+        uses: actions/cache@v2
+        with:
+          path: ~/.local/share/virtualenvs
+          key: ${{runner.os}}-pipenv-${{hashFiles('**/Pipfile.lock')}}
+
+      - name: Install dependencies
+        if: steps.cache-pipenv.outputs.cache-hit != 'true'
+        run: |
+          pipenv install --deploy --dev
+
+      - name: Run test suite
+        run: |
+          pipenv run test -v

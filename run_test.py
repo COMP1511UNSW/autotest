@@ -13,7 +13,7 @@ class InternalError(Exception):
     pass
 
 
-class Test:
+class _Test:
     def __init__(self, autotest_dir, **parameters):
         debug = parameters["debug"]
         self.autotest_dir = autotest_dir
@@ -201,7 +201,7 @@ class Test:
         if self.stdin_file[0] == "/":
             return self.stdin_file
         path = os.path.realpath(self.autotest_dir + "/" + self.stdin_file)
-        path = re.sub("/tmp_amd/\w+/export/\w+/\d/(\w+)", r"/home/\1", path)
+        path = re.sub(r"/tmp_amd/\w+/export/\w+/\d/(\w+)", r"/home/\1", path)
         return path
 
     def get_long_explanation(self):

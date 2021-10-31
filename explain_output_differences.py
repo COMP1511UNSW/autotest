@@ -81,7 +81,7 @@ def explain_output_differences(
             f"Your program produced these {n_actual_lines} lines of {name}:\n"
         )
     else:
-        actual_description = "Your program produced this line of {name}:\n"
+        actual_description = f"Your program produced this line of {name}:\n"
 
     if not expected and actual:
         explanation = colored(
@@ -262,7 +262,7 @@ def create_diff(
     diff = difflib.ndiff(canonical_actual_lines, canonical_expected_lines)
     diff_explanation = [
         f"The difference between your {name}({colored('-', 'red')})"
-        + f"and the correct {name}({colored('-', 'green')} is:"
+        + f" and the correct {name}({colored('+', 'green')}) is:"
     ]
     if prefix_removed:
         diff_explanation.append("...")

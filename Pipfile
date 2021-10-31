@@ -8,6 +8,14 @@ termcolor = "==1.1.0"
 requests = "*"
 
 [dev-packages]
+black = "*"
+pytest = "*"
 
 [requires]
 python_version = "3.9"
+
+[pipenv]
+allow_prereleases = true
+
+[scripts]
+test = "pytest"
