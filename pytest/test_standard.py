@@ -107,7 +107,7 @@ class TestStandard:
             timeout=10,
             encoding="utf-8",
         )
-        # Do a series of greps to find if we have the correct output.
+        # Peform a series of greps to find if we have the correct output.
         # Yes, this feels very brittle. No, I don't have a better solution.
         # More greps could be added to ensure that this is more effective.
         success = True
