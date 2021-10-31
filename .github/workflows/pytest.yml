@@ -11,7 +11,7 @@ jobs:
         uses: fkirc/skip-duplicate-actions@master
         with:
           concurrent_skipping: 'same_content'
-          do_not_skip: ["push"]
+          do_not_skip: '["push"]'
 
   # actual auto pytest
   main_job:
