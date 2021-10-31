@@ -3,7 +3,7 @@
 import argparse, fnmatch, os, re, sys
 from parse_test_specification import parse_file, parse_string
 from util import die
-from run_test import Test
+from run_test import _Test
 from copy_files_to_temp_directory import load_embedded_autotest
 
 # rewrite the extra help
@@ -27,7 +27,7 @@ def process_arguments():
         debug=args.debug,
     )
     tests = dict(
-        (label, Test(args.autotest_directory, **t))
+        (label, _Test(args.autotest_directory, **t))
         for (label, t) in tests_as_dicts.items()
     )
     if not tests:

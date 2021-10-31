@@ -10,12 +10,12 @@ from util import die
 from typing import Dict, List, Any, Union
 from collections.abc import Sequence
 
-from run_test import Test
+from run_test import _Test
 from argparse import Namespace
 
 
 def run_tests(
-    tests: Dict[str, Test],
+    tests: Dict[str, _Test],
     global_parameters: Dict[str, Any],
     args: Namespace,
     file=sys.stdout,
@@ -69,7 +69,7 @@ def run_tests(
 
 # TO-DO: provide stricter type for previous_errors
 def run_one_test(
-    test: Test, args: Namespace, file=sys.stdout, previous_errors: Dict[str, Any] = {}
+    test: _Test, args: Namespace, file=sys.stdout, previous_errors: Dict[str, Any] = {}
 ) -> int:
     """
     return -1 for test not run, 0 for test failed, 1 for test passed
@@ -483,7 +483,7 @@ def run_support_command(
 
 
 def generate_expected_output(
-    tests: Dict[str, Test],
+    tests: Dict[str, _Test],
     global_parameters: Dict[str, Any],
     args: Namespace,
     file=sys.stdout,
@@ -518,7 +518,7 @@ def generate_expected_output(
 
 
 def print_tests_and_expected_output(
-    tests: Dict[str, Test], args: Namespace, file
+    tests: Dict[str, _Test], args: Namespace, file
 ) -> None:
     output_file_without_parameters(
         args.test_specification_pathname,
@@ -530,7 +530,7 @@ def print_tests_and_expected_output(
     print_expected_output(tests, args, file)
 
 
-def print_expected_output(tests: Dict[str, Test], args: Namespace, file) -> None:
+def print_expected_output(tests: Dict[str, _Test], args: Namespace, file) -> None:
     # ignore output from tests
     with open(os.devnull, "w") as dev_null:
         for (label, test) in tests.items():

@@ -13,7 +13,7 @@ class InternalError(Exception):
     pass
 
 
-class Test:
+class _Test:
     def __init__(self, autotest_dir, **parameters):
         debug = parameters["debug"]
         self.autotest_dir = autotest_dir
