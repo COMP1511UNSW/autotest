@@ -260,9 +260,7 @@ class _Test:
                 and "Execution stopped because" in self.stderr
             ):
                 n_output_lines = len(self.stdout.splitlines())
-                self.long_explanation += (
-                    f"Your program produced these {n_output_lines} lines of output before it was terminated:\n"
-                )
+                self.long_explanation += f"Your program produced these {n_output_lines} lines of output before it was terminated:\n"
                 self.long_explanation += colored(
                     sanitize_string(self.stdout, **self.parameters), "cyan"
                 )
@@ -277,9 +275,7 @@ class _Test:
                 if "\x1b" not in self.long_explanation:
                     errors = colored(errors, "red")
                 if "Error too much output" in self.stderr:
-                    errors += (
-                        f"Your program produced these {len(self.stdout)} bytes of output before it was terminated:\n"
-                    )
+                    errors += f"Your program produced these {len(self.stdout)} bytes of output before it was terminated:\n"
                     errors += colored(
                         sanitize_string(self.stdout, **self.parameters), "yellow"
                     )
@@ -330,9 +326,7 @@ class _Test:
 
         if self.parameters["show_stdin"]:
             if std_input and n_input_lines < 32:
-                self.long_explanation += (
-                    f"\nThe std_input for this test was:\n{colored(std_input, 'yellow')}\n"
-                )
+                self.long_explanation += f"\nThe std_input for this test was:\n{colored(std_input, 'yellow')}\n"
                 if std_input[-1] != "\n" and "\n" in std_input[:-2]:
                     self.long_explanation += (
                         "Note: last character in above input is not '\\n'\n\n"
@@ -422,9 +416,7 @@ class _Test:
                 )
             column = len(prefix)
             explanation = f"Byte {column + 1} of line {line_number + 1} of your program's output is a {description}\n"
-            explanation += (
-                f"Here is line {line_number + 1} with non-printable characters replaced with backslash-escaped equivalents:\n\n"
-            )
+            explanation += f"Here is line {line_number + 1} with non-printable characters replaced with backslash-escaped equivalents:\n\n"
             line = line.encode("unicode_escape").decode("ascii") + "\n\n"
             line = re.sub(r"(\\x[0-9a-f][0-9a-f])", colored(r"\1", "red"), line)
             explanation += line
