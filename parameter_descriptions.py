@@ -536,9 +536,7 @@ def interpolate_file(e, parameter_name, parameters):
 	if isinstance(e, bytes):
 		# TODO: automatically handle determining if parameter is non-unicode?
 		# This would place less responsibility on the test writer, 
-		# => a good change? Performance is always a concern,
-		# but frankly should be minimal. Still worth considering given
-		# program size.
+		# => a good change? 
 		return e
 	if not isinstance(e, list):
 		raise TestSpecificationError("invalid type for value in {parameter_name}")
