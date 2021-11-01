@@ -496,51 +496,53 @@ PARAMETER_LIST += [
     ),
 ]
 
-def finalize_stream(parameter_name, stream_contents, parameters):
-	"""
-	handle specifications of stdin, expected_stdin, expected_stdout
-	All three can be specified as a string or as list of filename.
 
-	For backwards compatibility
-	The deprocated parameters stdin_file, expected_stdin_file, expected_stdout_file are also handled.
-	As checking for a file named test_label.stdin etc
-	"""
-	stream_name = parameter_name.replace("expected_", "")
-	deprocated_file_name = parameters.get(f"{parameter_name}_file", "")
-	if not stream_contents and deprocated_file_name:
-		stream_contents = [deprocated_file_name]
-	if not stream_contents and "label" in parameters:
-		filename = f'{parameters["label"]}.{stream_name}'
-		if os.path.exists(
-			os.path.join(parameters["supplied_files_directory"], filename)
-		):
-			stream_contents = [filename]
-	return interpolate_file(stream_contents, parameter_name, parameters)
+def finalize_stream(parameter_name, stream_contents, parameters):
+    """
+    handle specifications of stdin, expected_stdin, expected_stdout
+    All three can be specified as a string or as list of filename.
+
+    For backwards compatibility
+    The deprocated parameters stdin_file, expected_stdin_file, expected_stdout_file are also handled.
+    As checking for a file named test_label.stdin etc
+    """
+    stream_name = parameter_name.replace("expected_", "")
+    deprocated_file_name = parameters.get(f"{parameter_name}_file", "")
+    if not stream_contents and deprocated_file_name:
+        stream_contents = [deprocated_file_name]
+    if not stream_contents and "label" in parameters:
+        filename = f'{parameters["label"]}.{stream_name}'
+        if os.path.exists(
+            os.path.join(parameters["supplied_files_directory"], filename)
+        ):
+            stream_contents = [filename]
+    return interpolate_file(stream_contents, parameter_name, parameters)
 
 
 def interpolate_file(e, parameter_name, parameters):
-	"""
-		where a list of filenames is specified instead of a string
-		return a string formed from concatenating the files
-	"""
-	if not e:
-		return ''
-	# TODO: ensure this change is appropriate
-	if isinstance(e, str):
-		return e
-	if isinstance(e, bytes):
-		# TODO: automatically handle determining if parameter is non-unicode?
-		# This would place less responsibility on the test writer, 
-		# => a good change? 
-		return e
-	if not isinstance(e, list):
-		raise TestSpecificationError("invalid type for value in {parameter_name}")
-	contents = ''
-	for pathname in e:
-		if not isinstance(pathname, str):
-			raise TestSpecificationError("invalid type for value in {parameter_name}")
-		contents += read_file(pathname, parameters)
-	return contents
+    """
+    where a list of filenames is specified instead of a string
+    return a string formed from concatenating the files
+    """
+    if not e:
+        return ""
+    # TODO: ensure this change is appropriate
+    if isinstance(e, str):
+        return e
+    if isinstance(e, bytes):
+        # TODO: automatically handle determining if parameter is non-unicode?
+        # This would place less responsibility on the test writer,
+        # => a good change?
+        return e
+    if not isinstance(e, list):
+        raise TestSpecificationError("invalid type for value in {parameter_name}")
+    contents = ""
+    for pathname in e:
+        if not isinstance(pathname, str):
+            raise TestSpecificationError("invalid type for value in {parameter_name}")
+        contents += read_file(pathname, parameters)
+    return contents
+
 
 def read_file(pathname, parameters):
     if not os.path.isabs(pathname):
@@ -560,44 +562,44 @@ PARAMETER_LIST += [
 			Bytes supplied on stdin for test.<br>
 			Deprocated: stdin is not specified and the file *test_label*`.stdin` exists, its contents are used.<br>
 			Not yet implemented: if value is a list it is treated as list of pathname of file(s) containing bytes.
-		"""),
-
-	# TODO: Ensure that this parameter always works
-	Parameter(
-		"unicode_stdin",
-		default = False,
-		# TODO: set to True if this becomes an official parameter.
-		show_in_documentation = False,
-		description = """
+		""",
+    ),
+    # TODO: Ensure that this parameter always works
+    Parameter(
+        "unicode_stdin",
+        default=False,
+        # TODO: set to True if this becomes an official parameter.
+        show_in_documentation=False,
+        description="""
 			New parameter. Describes whether or not the stdin is unicode.
 			Default is False.
-		"""),
-
-	Parameter(
-		"unicode_stdout",
-		default = False,
-		# TODO: set to True if this becomes an official parameter.
-		show_in_documentation = False,
-		description = """
+		""",
+    ),
+    Parameter(
+        "unicode_stdout",
+        default=False,
+        # TODO: set to True if this becomes an official parameter.
+        show_in_documentation=False,
+        description="""
 			New parameter. Describes whether or not the stdout is unicode.
 			Default is False.
-		"""),
-
-	Parameter(
-		"unicode_stderr",
-		default = False,
-		# TODO: set to True if this becomes an official parameter.
-		show_in_documentation = False,
-		description = """
+		""",
+    ),
+    Parameter(
+        "unicode_stderr",
+        default=False,
+        # TODO: set to True if this becomes an official parameter.
+        show_in_documentation=False,
+        description="""
 			New parameter. Describes whether or not the stderr is unicode.
 			Default is False.
-		"""),
-
-	Parameter(
-		"stdin_file",
-		default = '',
-		show_in_documentation = False,
-		description = """
+		""",
+    ),
+    Parameter(
+        "stdin_file",
+        default="",
+        show_in_documentation=False,
+        description="""
 			Deprocated: file supplied on stdin for test.<br>
 		""",
     ),
@@ -1220,6 +1222,7 @@ def normalize_parameters1(parameters, check_required_parameters_set=True, debug=
     finalize_parameters(parameters, debug=debug)
     if check_required_parameters_set:
         check_parameters_set(parameters, debug=debug)
+
 
 def set_parameter_aliases(parameters, debug=0):
     """

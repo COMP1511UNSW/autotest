@@ -67,14 +67,14 @@ class _Test:
             # weird termination with non-zero exit status seen on some CSE servers
             # ignore this execution and try again
             time.sleep(1)
-        
+
         if not self.parameters["unicode_stdout"]:
-            self.stdout = codecs.decode(stdout, 'UTF-8', errors='replace')
+            self.stdout = codecs.decode(stdout, "UTF-8", errors="replace")
         else:
             self.stdout = stdout
 
         if not self.parameters["unicode_stderr"]:
-            self.stderr = codecs.decode(stderr, 'UTF-8', errors='replace')
+            self.stderr = codecs.decode(stderr, "UTF-8", errors="replace")
         else:
             self.stderr = stderr
 
@@ -133,19 +133,22 @@ class _Test:
 
     def check_stream(self, actual, expected, name):
         if self.debug:
-            print('name:', name)
-            print('actual:', actual[0:256] if actual else '')
-            print('expected:', expected[0:256] if expected else '')
+            print("name:", name)
+            print("actual:", actual[0:256] if actual else "")
+            print("expected:", expected[0:256] if expected else "")
         if actual:
             if expected:
                 # TODO: Make this better. May require new params.
-                # FIXME. 
+                # FIXME.
                 # probably only need to check for bytearray; I've put both for completeness.
-                
+
                 # Handling non-unicode IO
-                if type(actual) in (bytearray, bytes) or type(expected) in (bytearray, bytes):
+                if type(actual) in (bytearray, bytes) or type(expected) in (
+                    bytearray,
+                    bytes,
+                ):
                     if actual == bytearray(expected):
-                        return None 
+                        return None
                     else:
                         return "Your non-unicode output is not correct."
                 # handling unicode input
@@ -296,15 +299,19 @@ class _Test:
             # If we don't have unicode in out stdout, we should check for bad characters
             bad_characters = False
             if not self.parameters["unicode_stdout"]:
-                bad_characters = self.check_bad_characters(self.stdout, expected=self.expected_stdout)
+                bad_characters = self.check_bad_characters(
+                    self.stdout, expected=self.expected_stdout
+                )
             if bad_characters:
                 self.long_explanation += bad_characters
-                self.parameters['show_diff'] = False
-            # report output differences in a easily readable manner 
+                self.parameters["show_diff"] = False
+            # report output differences in a easily readable manner
             # if we don't have unicode input.
             # TODO: improve unicode handling
             if not self.parameters["unicode_stdout"]:
-                self.long_explanation += self.report_difference("output", self.expected_stdout, self.stdout)
+                self.long_explanation += self.report_difference(
+                    "output", self.expected_stdout, self.stdout
+                )
             else:
                 self.long_explanation = f"You had {self.stdout} as stdout. You should have {self.expected_stdout}\n\n"
 
@@ -315,11 +322,11 @@ class _Test:
         input = self.stdin
         # we don't want to consider newlines when dealing with non-unicode output
         if self.parameters["unicode_stdin"] is False:
-            n_input_lines = input.count('\n')
+            n_input_lines = input.count("\n")
         else:
             # TODO: add *proper* else case for non-unicode input
             return self.long_explanation
-            # return """We're testing non-unicode input! This is a placeholder for when you use 
+            # return """We're testing non-unicode input! This is a placeholder for when you use
             # 	such input.\n"""
 
         if self.parameters["show_stdin"]:
