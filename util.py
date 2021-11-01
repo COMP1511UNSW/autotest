@@ -22,4 +22,4 @@ def die(message):
 
 def warn(message):
     my_name = re.sub(r"\.py$", "", os.path.basename(sys.argv[0]))
-    print("%s: %s" % (my_name, message), file=sys.stderr)
+    print(f"{my_name}: {message}", file=sys.stderr)
