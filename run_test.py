@@ -127,8 +127,7 @@ class Test():
 				
 				# Handling non-unicode IO
 				if type(actual) in (bytearray, bytes) or type(expected) in (bytearray, bytes):
-					# TODO: change this
-					if hex(int.from_bytes(bytes(actual), 'big')) == expected:
+					if actual == bytearray(expected):
 						return None 
 					else:
 						return "Your non-unicode output is not correct."
