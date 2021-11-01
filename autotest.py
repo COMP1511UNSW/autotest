@@ -46,29 +46,6 @@ def main():
 
 
 def run_autotest():
-<<<<<<< HEAD
-	args, tests, parameters = process_arguments()
-	if args.print_test_names:
-		test_groups = OrderedDict()
-		for test in tests.values():
-			files = tuple(sorted(test.files))
-			test_groups.setdefault(files, []).append(test.label)
-		print(json.dumps([{'files':files,'labels':labels} for (files,labels) in test_groups.items()]))
-		return 0
-	
-	copy_files_to_temp_directory(args, parameters)
-
-	if args.generate_expected_output != "no":
-		return generate_expected_output(tests, parameters, args)
-	if parameters.get('upload_url', ''):
-		return run_tests_and_upload_results(tests, parameters, args)
-	else:
-		return run_tests(tests, parameters, args)
-	
-
-if __name__ == '__main__':
-	main()
-=======
     args, tests, parameters = process_arguments()
 
     if args.print_test_names:
@@ -99,4 +76,3 @@ if __name__ == '__main__':
 
 if __name__ == "__main__":
     main()
->>>>>>> main
