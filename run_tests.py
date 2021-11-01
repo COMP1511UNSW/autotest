@@ -188,7 +188,7 @@ def run_one_test(
     else:
         print(
             colored("failed", "red"),
-            individual_test.short_explanation,
+            f"({individual_test.short_explanation})",
             file=file,
         )
         if long_explanation:
