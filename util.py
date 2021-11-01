@@ -5,21 +5,21 @@ import os, re, sys
 
 
 class AutotestException(Exception):
-	pass
+    pass
 
 
 class TestSpecificationError(AutotestException):
-	pass
+    pass
 
 
 class InternalError(AutotestException):
-	pass
+    pass
 
 
 def die(message):
-	raise InternalError(message)
+    raise InternalError(message)
 
 
 def warn(message):
-	my_name = re.sub(r'\.py$', '', os.path.basename(sys.argv[0]))
-	print("%s: %s" % (my_name, message), file=sys.stderr)
+    my_name = re.sub(r"\.py$", "", os.path.basename(sys.argv[0]))
+    print("%s: %s" % (my_name, message), file=sys.stderr)

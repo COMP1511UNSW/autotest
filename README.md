@@ -1,3 +1,5 @@
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
 Autotest runs a series of tests on 1 or more programs comparing their behaviour to specified expected behaviour.
 
 Autotest focuses on producing output comprehensible to a novice programmer
@@ -16,6 +18,12 @@ files=is_prime.c
 2 stdin="42" expected_stdout="42 is not prime\n"
 3 stdin="47" expected_stdout="47 is prime\n"
 ```
+
+## Installing requirements
+
+This project uses `pipenv` to manage requirements. You will need to install pipenv with `python3 -m pip install pipenv` and then fetch dependencies using `pipenv install`. 
+
+To run the script within the environment, it should be invoked using `pipenv run python autotest.py`.
 
 ## Running Autotest
 
