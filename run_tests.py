@@ -80,7 +80,7 @@ def run_one_test(test, args, file=sys.stdout, previous_errors={}):
 	chmod_program(**parameters)
 	
 	print(description, end='', file=file)
-
+	
 	individual_tests = []
 	for compile_command in (parameters['compile_commands'] or ['']):
 

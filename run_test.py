@@ -63,6 +63,7 @@ class Test():
 			# ignore this execution and try again
 			time.sleep(1)
 			# ignore this execution and try again
+
 		if not self.parameters["unicode_stdout"]:
 			self.stdout = codecs.decode(stdout, 'UTF-8', errors='replace')
 		else:
@@ -75,7 +76,7 @@ class Test():
 
 		self.short_explanation = None
 		self.long_explanation = None
-
+		
 		stdout_short_explanation = self.check_stream(self.stdout, self.expected_stdout, "output")
 		if not self.parameters["allow_unexpected_stderr"] or stdout_short_explanation:
 			if self.parameters['dcc_output_checking'] and 'Execution stopped because' in self.stderr:
@@ -84,12 +85,11 @@ class Test():
 				self.short_explanation = self.check_stream(self.stderr, self.expected_stderr, "stderr")
 
 		self.stderr_ok = not self.short_explanation
-
 		self.stdout_ok = not stdout_short_explanation
-
+		
 		if not self.short_explanation:
 			self.short_explanation = stdout_short_explanation
-
+		
 		if not self.short_explanation:
 			self.short_explanation = self.check_files()
 
@@ -127,7 +127,8 @@ class Test():
 				
 				# Handling non-unicode IO
 				if type(actual) in (bytearray, bytes) or type(expected) in (bytearray, bytes):
-					if actual == bytearray(expected):
+					# TODO: change this
+					if hex(int.from_bytes(bytes(actual), 'big')) == expected:
 						return None 
 					else:
 						return "Your non-unicode output is not correct."

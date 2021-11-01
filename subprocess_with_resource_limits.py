@@ -17,7 +17,6 @@ def run(command, **parameters):
 	else:
 		loop = asyncio.get_event_loop()
 	try:
-		print("we hereeeeeeeeeee")
 		cooroutine = run_coroutine(loop, command, **parameters)
 		output = loop.run_until_complete(cooroutine)
 	except KeyboardInterrupt:
@@ -90,11 +89,7 @@ def run_coroutine(loop, command,
 	# subtle issue with providing string as input so just write it to a temporary file
 	if stdin:
 		stdin_stream = tempfile.TemporaryFile()
-		# TODO: Verify that the else case is correct.
-		if not parameters["unicode_stdin"]:
-			stdin_stream.write(stdin.encode(locale.getpreferredencoding(False)))
-		else:
-			stdin_stream.write(stdin)
+		stdin_stream.write(stdin.encode(locale.getpreferredencoding(False)))
 		stdin_stream.seek(0)
 	else:
 		stdin_stream = subprocess.DEVNULL
