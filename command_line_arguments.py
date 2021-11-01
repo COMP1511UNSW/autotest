@@ -411,5 +411,7 @@ def repository_name(submission_name, account=None):
     import course_configuration  # type: ignore
 
     c = course_configuration["course_code"].lower()
-    return f"gitlab@gitlab.cse.unsw.EDU.AU:{zid}/" + \
-        f"{course_configuration['unsw_session']}-{c}-{submission_name}"
+    return (
+        f"gitlab@gitlab.cse.unsw.EDU.AU:{zid}/"
+        + f"{course_configuration['unsw_session']}-{c}-{submission_name}"
+    )

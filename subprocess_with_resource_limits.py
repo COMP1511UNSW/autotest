@@ -46,7 +46,7 @@ def run_coroutine(
     max_stderr_bytes=10000,
     debug=0,
     nice=0,
-    **parameters
+    **parameters,
 ):
     exit_future = asyncio.Future(loop=loop)
 
@@ -101,7 +101,7 @@ def run_coroutine(
         lambda: SubprocessProtocol(exit_future, max_stdout_bytes, max_stderr_bytes),
         *command,
         preexec_fn=set_limits,
-        stdin=stdin_stream
+        stdin=stdin_stream,
     )
     transport, protocol = yield from process
     errors = []
@@ -109,7 +109,9 @@ def run_coroutine(
 
         def wall_clock_alarm(errors):
             errors.append(
-                f"Error: real time limit of {max_real_seconds} seconds exceeded\n".encode("utf-8")
+                f"Error: real time limit of {max_real_seconds} seconds exceeded\n".encode(
+                    "utf-8"
+                )
             )
             transport.kill()
             transport.close()
@@ -137,10 +139,12 @@ def run_coroutine(
     if errors:
         stderr += b"".join(errors)
     elif exit_status == -signal.SIGXCPU:
-        stderr += f"Error: CPU limit of {max_cpu_seconds} seconds exceeded\n".encode("utf-8")
+        stderr += f"Error: CPU limit of {max_cpu_seconds} seconds exceeded\n".encode(
+            "utf-8"
+        )
     elif exit_status == -signal.SIGXFSZ:
-        stderr += (
-            f"Error: maximum file creation size of {max_file_size_bytes} bytes exceeded\n".encode("utf-8")
+        stderr += f"Error: maximum file creation size of {max_file_size_bytes} bytes exceeded\n".encode(
+            "utf-8"
         )
     if debug > 2:
         print(
@@ -167,7 +171,9 @@ class SubprocessProtocol(asyncio.SubprocessProtocol):
         if n_bytes > max_bytes:
             if fd == 1 and not self.finished[1]:
                 self.process_streams[2].extend(
-                    f"\nError too much output - maximum stdout bytes of {self.max_stream_bytes[fd]} exceeded.".encode("utf-8")
+                    f"\nError too much output - maximum stdout bytes of {self.max_stream_bytes[fd]} exceeded.".encode(
+                        "utf-8"
+                    )
                 )
             self.finished = [True, True, True]
             if self.debug > 1:
