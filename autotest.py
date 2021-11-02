@@ -32,14 +32,14 @@ def main():
     try:
         sys.exit(run_autotest())
     except AutotestException as e:
-        print("%s: %s" % (my_name, str(e)), file=sys.stderr)
+        print(f"{my_name}: {e}", file=sys.stderr)
         if debug:
             traceback.print_exc(file=sys.stderr)
         sys.exit(2)
     except Exception:
         etype, evalue, etraceback = sys.exc_info()
         eformatted = "\n".join(traceback.format_exception_only(etype, evalue))
-        print("%s: internal error: %s" % (my_name, eformatted), file=sys.stderr)
+        print(f"{my_name}: internal error: {eformatted}", file=sys.stderr)
         if debug:
             traceback.print_exc(file=sys.stderr)
         sys.exit(2)

@@ -46,7 +46,7 @@ def run_coroutine(
     max_stderr_bytes=10000,
     debug=0,
     nice=0,
-    **parameters
+    **parameters,
 ):
     exit_future = asyncio.Future(loop=loop)
 
@@ -101,7 +101,7 @@ def run_coroutine(
         lambda: SubprocessProtocol(exit_future, max_stdout_bytes, max_stderr_bytes),
         *command,
         preexec_fn=set_limits,
-        stdin=stdin_stream
+        stdin=stdin_stream,
     )
     transport, protocol = yield from process
     errors = []
@@ -109,7 +109,9 @@ def run_coroutine(
 
         def wall_clock_alarm(errors):
             errors.append(
-                b"Error: real time limit of %d seconds exceeded\n" % max_real_seconds
+                f"Error: real time limit of {max_real_seconds} seconds exceeded\n".encode(
+                    "utf-8"
+                )
             )
             transport.kill()
             transport.close()
@@ -137,11 +139,12 @@ def run_coroutine(
     if errors:
         stderr += b"".join(errors)
     elif exit_status == -signal.SIGXCPU:
-        stderr += b"Error: CPU limit of %d seconds exceeded\n" % max_cpu_seconds
+        stderr += f"Error: CPU limit of {max_cpu_seconds} seconds exceeded\n".encode(
+            "utf-8"
+        )
     elif exit_status == -signal.SIGXFSZ:
-        stderr += (
-            b"Error: maximum file creation size of %d bytes exceeded\n"
-            % max_file_size_bytes
+        stderr += f"Error: maximum file creation size of {max_file_size_bytes} bytes exceeded\n".encode(
+            "utf-8"
         )
     if debug > 2:
         print(
@@ -161,24 +164,25 @@ class SubprocessProtocol(asyncio.SubprocessProtocol):
 
     def pipe_data_received(self, fd, data):
         if self.debug > 1:
-            print("pipe_data_received(%d)" % fd, file=sys.stderr)
+            print(f"pipe_data_received({fd})", file=sys.stderr)
         n_bytes = len(data)
         max_bytes = max(0, self.max_stream_bytes[fd] - len(self.process_streams[fd]))
         self.process_streams[fd].extend(data[0:max_bytes])
         if n_bytes > max_bytes:
             if fd == 1 and not self.finished[1]:
                 self.process_streams[2].extend(
-                    b"\nError too much output - maximum stdout bytes of %d exceeded."
-                    % self.max_stream_bytes[fd]
+                    f"\nError too much output - maximum stdout bytes of {self.max_stream_bytes[fd]} exceeded.".encode(
+                        "utf-8"
+                    )
                 )
             self.finished = [True, True, True]
             if self.debug > 1:
-                print("stream limit exceeded(fd=%d)" % fd, file=sys.stderr)
+                print(f"stream limit exceeded(fd={fd})", file=sys.stderr)
             self.terminate()
 
     def pipe_connection_lost(self, fd, exc):
         if self.debug > 1:
-            print("pipe_connection_lost(%d)" % fd, file=sys.stderr)
+            print(f"pipe_connection_lost({fd})", file=sys.stderr)
         self.finished[fd] = True
         self.check_everything_finished()
 

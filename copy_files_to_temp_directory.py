@@ -71,7 +71,7 @@ def fetch_submission(temp_dir, args):
                 with open(file, "w") as f:
                     f.write(sys.stdin.read())
             except IOError:
-                die("can not create %s" % file)
+                die(f"can not create {file}")
             return
         if args.debug:
             print("files_to_copy:", files_to_copy, file=sys.stderr)
@@ -159,7 +159,7 @@ def execute(command, print_command=True):
     if print_command:
         print(" ".join(command))
     if subprocess.call(command) != 0:
-        die("%s failed" % command[0])
+        die(f"{command[0]} failed")
 
 
 def load_embedded_autotest(exercise):
