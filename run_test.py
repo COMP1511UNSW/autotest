@@ -305,7 +305,7 @@ class _Test:
                 if isinstance(self.command, list)
                 else self.command
             )
-            if input:
+            if std_input:
                 echo_command = echo_command_for_string(input)
                 if not self.stdin_file_name() or len(echo_command) < 128:
                     if "shell" in self.parameters and (
