@@ -45,7 +45,7 @@ class _Test:
         self.test_passed = None
 
     def __str__(self):
-        return "Test(%s, %s, %s)" % (self.label, self.program, self.command)
+        return f"Test({self.label}, {self.program}, {self.command})"
 
     def run_test(self, compile_command=""):
         if self.debug > 1:
@@ -166,9 +166,9 @@ class _Test:
         else:
             if expected:
                 if name.lower().startswith("file"):
-                    return "File %s is empty" % name
+                    return f"File {name} is empty"
                 else:
-                    return "No %s produced" % name
+                    return f"No {name} produced"
             else:
                 return None
 
@@ -179,7 +179,7 @@ class _Test:
 
         if filter:
             if self.debug:
-                print("postprocess_output_command=%s str='%s'" % (filter, s))
+                print(f"postprocess_output_command={filter} str='{s}'")
             p = subprocess.run(
                 filter,
                 stdout=subprocess.PIPE,
@@ -198,7 +198,7 @@ class _Test:
                 )
             s = p.stdout
             if self.debug:
-                print("after filter s='%s'" % s)
+                print(f"after filter s='{s}'")
 
         if self.parameters["ignore_case"]:
             s = s.lower()
@@ -209,7 +209,7 @@ class _Test:
         if self.parameters["ignore_trailing_whitespace"]:
             s = re.sub(r"[ \t]+\n", "\n", s)
         if self.debug > 1:
-            print("make_string_canonical('%s') -> '%s'" % (raw_str, s))
+            print(f"make_string_canonical('{raw_str}') -> '{s}'")
         return s
 
     def compare_strings(self, actual, expected):
@@ -259,9 +259,9 @@ class _Test:
                 self.parameters["dcc_output_checking"]
                 and "Execution stopped because" in self.stderr
             ):
+                n_output_lines = len(self.stdout.splitlines())
                 self.long_explanation += (
-                    "Your program produced these %d lines of output before it was terminated:\n"
-                    % (len(self.stdout.splitlines()))
+                    f"Your program produced these {n_output_lines} lines of output before it was terminated:\n"
                 )
                 self.long_explanation += colored(
                     sanitize_string(self.stdout, **self.parameters), "cyan"
@@ -278,8 +278,7 @@ class _Test:
                     errors = colored(errors, "red")
                 if "Error too much output" in self.stderr:
                     errors += (
-                        "Your program produced these %d bytes of output before it was terminated:\n"
-                        % (len(self.stdout))
+                        f"Your program produced these {len(self.stdout)} bytes of output before it was terminated:\n"
                     )
                     errors += colored(
                         sanitize_string(self.stdout, **self.parameters), "yellow"
@@ -319,7 +318,7 @@ class _Test:
             self.long_explanation = self.report_difference(
                 self.file_not_ok, self.file_expected, self.file_actual
             )
-        input = self.stdin
+        std_input = self.stdin
         # we don't want to consider newlines when dealing with non-unicode output
         if self.parameters["unicode_stdin"] is False:
             n_input_lines = input.count("\n")
@@ -330,11 +329,11 @@ class _Test:
             # 	such input.\n"""
 
         if self.parameters["show_stdin"]:
-            if input and n_input_lines < 32:
+            if std_input and n_input_lines < 32:
                 self.long_explanation += (
-                    "\nThe input for this test was:\n%s\n" % colored(input, "yellow")
+                    f"\nThe std_input for this test was:\n{colored(std_input, 'yellow')}\n"
                 )
-                if input[-1] != "\n" and "\n" in input[0:-2]:
+                if std_input[-1] != "\n" and "\n" in std_input[:-2]:
                     self.long_explanation += (
                         "Note: last character in above input is not '\\n'\n\n"
                     )
@@ -360,7 +359,7 @@ class _Test:
                         ";" in command or "&" in command or "|" in command
                     ):
                         command = "(" + command + ")"
-                    command = "%s | %s" % (echo_command, command)
+                    command = f"{echo_command} | {command}"
                 else:
                     command += " <" + self.stdin_file_name()
                 command = indent + command
@@ -377,7 +376,7 @@ class _Test:
     # TODO: make this work with non-unicode input
     def report_difference(self, name, expected, actual):
         if self.debug:
-            print("report_difference(%s, '%s', '%s')" % (name, expected, actual))
+            print(f"report_difference({name}, '{expected}', '{actual}')")
         canonical_expected = self.make_string_canonical(expected)
         canonical_actual = self.make_string_canonical(actual)
         canonical_actual_plus_newlines = self.make_string_canonical(
@@ -412,24 +411,19 @@ class _Test:
             (prefix, offending_char) = m.groups()
             offending_value = ord(offending_char)
             if offending_value == 0:
-                description = "zero byte ('" + colored("\\0", "red") + "')"
+                description = "zero byte ('" + colored(r"\0", "red") + "')"
             elif offending_value > 127:
                 description = "non-ascii byte " + colored(
-                    "\\x%02x" % (offending_value), "red"
+                    r"\x" + f"{offending_value:02x}", "red"
                 )
             else:
                 description = "non-printable character " + colored(
-                    "\\x%02x" % (offending_value), "red"
+                    r"\x" + f"{offending_value:02x}", "red"
                 )
             column = len(prefix)
-            explanation = "Byte %d of line %d of your program's output is a %s\n" % (
-                column + 1,
-                line_number + 1,
-                description,
-            )
+            explanation = f"Byte {column + 1} of line {line_number + 1} of your program's output is a {description}\n"
             explanation += (
-                "Here is line %d with non-printable characters replaced with backslash-escaped equivalents:\n\n"
-                % (line_number + 1)
+                f"Here is line {line_number + 1} with non-printable characters replaced with backslash-escaped equivalents:\n\n"
             )
             line = line.encode("unicode_escape").decode("ascii") + "\n\n"
             line = re.sub(r"(\\x[0-9a-f][0-9a-f])", colored(r"\1", "red"), line)

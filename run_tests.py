@@ -33,7 +33,7 @@ def run_tests(
     if os.path.exists("./runtests.pl"):
         return subprocess.call(["./runtests.pl"] + args.extra_arguments)
     if not tests:
-        die("autotest not available for %s" % args.exercise)
+        die(f"autotest not available for {args.exercise}")
     if not args.labels:
         die("nothing to test")
 
@@ -188,7 +188,7 @@ def run_one_test(
     else:
         print(
             colored("failed", "red"),
-            "(%s)" % individual_test.short_explanation,
+            individual_test.short_explanation,
             file=file,
         )
         if long_explanation:

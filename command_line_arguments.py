@@ -30,7 +30,7 @@ def process_arguments():
         for (label, t) in tests_as_dicts.items()
     )
     if not tests:
-        die("no tests found for %s" % args.exercise)
+        die(f"no tests found for {args.exercise}")
     normalize_arguments(parser, args, tests)
     return args, tests, parameters
 
@@ -410,9 +410,5 @@ def repository_name(submission_name, account=None):
     import course_configuration  # type: ignore
 
     c = course_configuration["course_code"].lower()
-    return "gitlab@gitlab.cse.unsw.EDU.AU:%s/%s-%s-%s" % (
-        zid,
-        course_configuration["unsw_session"],
-        c,
-        submission_name,
-    )
+    return f"gitlab@gitlab.cse.unsw.EDU.AU:{zid}/" + \
+        f"{course_configuration['unsw_session']}-{c}-{submission_name}"
