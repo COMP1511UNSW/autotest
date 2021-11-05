@@ -117,8 +117,12 @@ class _Test:
     def check_files(self):
         for (pathname, expected_contents) in self.parameters["expected_files"].items():
             try:
-                with open(pathname, encoding="UTF-8", errors="replace") as f:
-                    actual_contents = f.read()
+                if not self.parameters["unicode_stdout"]:
+                    with open(pathname, encoding="UTF-8", errors="replace") as f:
+                        actual_contents = f.read()
+                else:
+                    with open(pathname, mode="rb") as f:
+                        actual_contents = f.read()
             except IOError:
                 self.long_explanation = f"Your program was expected to create a file named '{pathname}' and did not\n"
                 actual_contents = ""
@@ -311,19 +315,26 @@ class _Test:
                 self.long_explanation = f"You had {self.stdout} as stdout. You should have {self.expected_stdout}\n\n"
 
         if self.stdout_ok and self.stderr_ok and self.file_not_ok:
-            self.long_explanation = self.report_difference(
-                self.file_not_ok, self.file_expected, self.file_actual
-            )
+            if not self.parameters["unicode_stdout"]:
+                self.long_explanation = self.report_difference(
+                    self.file_not_ok, self.file_expected, self.file_actual
+                )
+            else: 
+                self.long_explanation = "Your non-unicode files had incorrect output\n"
+                self.long_explanation += f"File {self.file_not_ok} had the following error:\n"
+                self.long_explanation += f"expected: {self.file_expected} actual: {self.file_actual}"
+                print(type(self.file_actual))
+                
         std_input = self.stdin
         # we don't want to consider newlines when dealing with non-unicode output
         if self.parameters["unicode_stdin"] is False:
-            n_input_lines = input.count("\n")
+            n_input_lines = std_input.count("\n")
         else:
             # TODO: add *proper* else case for non-unicode input
             return self.long_explanation
             # return """We're testing non-unicode input! This is a placeholder for when you use
             # 	such input.\n"""
-
+        
         if self.parameters["show_stdin"]:
             if std_input and n_input_lines < 32:
                 self.long_explanation += (

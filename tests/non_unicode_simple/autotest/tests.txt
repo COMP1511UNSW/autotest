@@ -2,4 +2,4 @@ files="not_unicode.c"
 program="not_unicode"
 
 # TODO: The values of these parameters need to be flipped everywhere, or else their values changed...
-test1  expected_stdout=b"\xff\xff" unicode_stdin=True unicode_stdout=True
+test1  expected_stdout=b"\xff\xff"  unicode_stdout=True

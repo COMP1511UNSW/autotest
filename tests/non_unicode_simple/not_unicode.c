@@ -2,7 +2,7 @@
 #include <stdint.h>
 
 int main(void) {
-    uint32_t a = 0xFFFF;
+    uint32_t a = 0xFF;
     putchar(a);
     putchar(a);
     return 0;
