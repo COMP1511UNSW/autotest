@@ -319,12 +319,16 @@ class _Test:
                 self.long_explanation = self.report_difference(
                     self.file_not_ok, self.file_expected, self.file_actual
                 )
-            else: 
+            else:
                 self.long_explanation = "Your non-unicode files had incorrect output\n"
-                self.long_explanation += f"File {self.file_not_ok} had the following error:\n"
-                self.long_explanation += f"expected: {self.file_expected} actual: {self.file_actual}"
+                self.long_explanation += (
+                    f"File {self.file_not_ok} had the following error:\n"
+                )
+                self.long_explanation += (
+                    f"expected: {self.file_expected} actual: {self.file_actual}"
+                )
                 print(type(self.file_actual))
-                
+
         std_input = self.stdin
         # we don't want to consider newlines when dealing with non-unicode output
         if self.parameters["unicode_stdin"] is False:
@@ -334,7 +338,7 @@ class _Test:
             return self.long_explanation
             # return """We're testing non-unicode input! This is a placeholder for when you use
             # 	such input.\n"""
-        
+
         if self.parameters["show_stdin"]:
             if std_input and n_input_lines < 32:
                 self.long_explanation += (
