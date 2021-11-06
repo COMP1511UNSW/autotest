@@ -77,7 +77,7 @@ class _Test:
             self.stderr = codecs.decode(stderr, "UTF-8", errors="replace")
         else:
             self.stderr = stderr
-        
+
         self.short_explanation = None
         self.long_explanation = None
 
@@ -94,7 +94,7 @@ class _Test:
                 self.short_explanation = self.check_stream(
                     self.stderr, self.expected_stderr, "stderr"
                 )
-        
+
         self.stderr_ok = not self.short_explanation
 
         self.stdout_ok = not stdout_short_explanation
