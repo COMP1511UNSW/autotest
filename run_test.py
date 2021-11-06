@@ -315,7 +315,7 @@ class _Test:
                     "output", self.expected_stdout, self.stdout
                 )
             else:
-                self.long_explanation = f"You had {self.stdout} as stdout. You should have {self.expected_stdout}\n\n"
+                self.long_explanation = f"You had 0x{self.stdout.hex()} as stdout. You should have 0x{self.expected_stdout.hex()}\n\n"
 
         if self.stdout_ok and self.stderr_ok and self.file_not_ok:
             if not self.parameters["unicode_stdout"]:
@@ -330,7 +330,6 @@ class _Test:
                 self.long_explanation += (
                     f"expected: {self.file_expected} actual: {self.file_actual}"
                 )
-                print(type(self.file_actual))
 
         std_input = self.stdin
         # we don't want to consider newlines when dealing with non-unicode output
