@@ -1,0 +1,5 @@
+files="not_unicode_stdout.c"
+program="not_unicode_stdout"
+
+# TODO: The values of these parameters need to be flipped everywhere, or else their values changed...
+test_stdout  expected_stdout=b"\xff\xff" unicode_stdout=True

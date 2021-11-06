@@ -77,7 +77,7 @@ class _Test:
             self.stderr = codecs.decode(stderr, "UTF-8", errors="replace")
         else:
             self.stderr = stderr
-
+        
         self.short_explanation = None
         self.long_explanation = None
 
@@ -94,7 +94,7 @@ class _Test:
                 self.short_explanation = self.check_stream(
                     self.stderr, self.expected_stderr, "stderr"
                 )
-
+        
         self.stderr_ok = not self.short_explanation
 
         self.stdout_ok = not stdout_short_explanation
@@ -256,9 +256,12 @@ class _Test:
         self.long_explanation = ""
         if not self.stderr_ok:
             if self.expected_stderr:
-                self.long_explanation += self.report_difference(
-                    "stderr", self.expected_stderr, self.stderr
-                )
+                if not self.parameters["unicode_stderr"]:
+                    self.long_explanation += self.report_difference(
+                        "stderr", self.expected_stderr, self.stderr
+                    )
+                else:
+                    self.long_explanation = f"You had 0x{self.stderr.hex()} as stderr. You should have 0x{self.expected_stderr.hex()}\n\n"
             elif (
                 self.parameters["dcc_output_checking"]
                 and "Execution stopped because" in self.stderr
@@ -306,7 +309,7 @@ class _Test:
                 self.parameters["show_diff"] = False
             # report output differences in a easily readable manner
             # if we don't have unicode input.
-            # TODO: improve unicode handling
+            # TODO: improve non-unicode handling
             if not self.parameters["unicode_stdout"]:
                 self.long_explanation += self.report_difference(
                     "output", self.expected_stdout, self.stdout
