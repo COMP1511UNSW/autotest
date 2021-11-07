@@ -247,7 +247,7 @@ class TestStandard:
         if not re.search(r" tests passed 0 tests failed *$", p.stdout):
             print(p.stdout)
             assert False
-    
+
     def test_non_unicode_stderr(self):
         test_folder = "tests/non_unicode_stderr"
         p = subprocess.run(
