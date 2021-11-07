@@ -284,7 +284,12 @@ class TestStandard:
             timeout=10,
             encoding="utf-8",
         )
-        if not re.search(r" tests passed 0 tests failed *$", p.stdout):
+        expected_output = r"Test test_incorrect_output \(not_unicode_mult\) - failed \(Your non-unicode output is not correct.\)\n"
+        expected_output += r"Your non-unicode files had incorrect output\n"
+        expected_output += r"File test_file2 had the following error:\n"
+        expected_output += r"expected: 0xa573bfffa571 actual: 0xa571ffffa571\n"
+        print(expected_output)
+        if not re.search(expected_output, p.stdout):
             print(p.stdout)
             assert False
 
