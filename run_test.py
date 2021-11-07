@@ -261,7 +261,8 @@ class _Test:
                         "stderr", self.expected_stderr, self.stderr
                     )
                 else:
-                    self.long_explanation = f"You had 0x{self.stderr.hex()} as stderr. You should have 0x{self.expected_stderr.hex()}\n\n"
+                    self.long_explanation = f"You had 0x{self.stderr.hex()} as stderr. "
+                    self.long_explanation += f"You should have 0x{self.expected_stderr.hex()}\n\n"
             elif (
                 self.parameters["dcc_output_checking"]
                 and "Execution stopped because" in self.stderr
@@ -315,7 +316,8 @@ class _Test:
                     "output", self.expected_stdout, self.stdout
                 )
             else:
-                self.long_explanation = f"You had 0x{self.stdout.hex()} as stdout. You should have 0x{self.expected_stdout.hex()}\n\n"
+                self.long_explanation = f"You had 0x{self.stdout.hex()} as stdout. "
+                self.long_explanation += f"You should have 0x{self.expected_stdout.hex()}\n\n"
 
         if self.stdout_ok and self.stderr_ok and self.file_not_ok:
             if self.parameters["unicode_stdout"]:
@@ -327,7 +329,8 @@ class _Test:
                 self.long_explanation += (
                     f"File {self.file_not_ok} had the following error:\n"
                 )
-                self.long_explanation += f"expected: 0x{self.file_expected.hex()} actual: 0x{self.file_actual.hex()}\n"
+                self.long_explanation += f"expected: 0x{self.file_expected.hex()} "
+                self.long_explanation += f"actual: 0x{self.file_actual.hex()}\n"
 
         std_input = self.stdin
         # we don't want to consider newlines when dealing with non-unicode output
@@ -336,8 +339,6 @@ class _Test:
         else:
             # TODO: add *proper* else case for non-unicode input
             return self.long_explanation
-            # return """We're testing non-unicode input! This is a placeholder for when you use
-            # 	such input.\n"""
 
         if self.parameters["show_stdin"]:
             if std_input and n_input_lines < 32:
