@@ -262,7 +262,9 @@ class _Test:
                     )
                 else:
                     self.long_explanation = f"You had 0x{self.stderr.hex()} as stderr. "
-                    self.long_explanation += f"You should have 0x{self.expected_stderr.hex()}\n\n"
+                    self.long_explanation += (
+                        f"You should have 0x{self.expected_stderr.hex()}\n\n"
+                    )
             elif (
                 self.parameters["dcc_output_checking"]
                 and "Execution stopped because" in self.stderr
@@ -317,7 +319,9 @@ class _Test:
                 )
             else:
                 self.long_explanation = f"You had 0x{self.stdout.hex()} as stdout. "
-                self.long_explanation += f"You should have 0x{self.expected_stdout.hex()}\n\n"
+                self.long_explanation += (
+                    f"You should have 0x{self.expected_stdout.hex()}\n\n"
+                )
 
         if self.stdout_ok and self.stderr_ok and self.file_not_ok:
             if self.parameters["unicode_stdout"]:
