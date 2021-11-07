@@ -327,9 +327,7 @@ class _Test:
                 self.long_explanation += (
                     f"File {self.file_not_ok} had the following error:\n"
                 )
-                self.long_explanation += (
-                    f"expected: 0x{self.file_expected.hex()} actual: 0x{self.file_actual.hex()}\n"
-                )
+                self.long_explanation += f"expected: 0x{self.file_expected.hex()} actual: 0x{self.file_actual.hex()}\n"
 
         std_input = self.stdin
         # we don't want to consider newlines when dealing with non-unicode output
