@@ -68,12 +68,12 @@ class _Test:
             # ignore this execution and try again
             time.sleep(1)
 
-        if not self.parameters["unicode_stdout"]:
+        if self.parameters["unicode_stdout"]:
             self.stdout = codecs.decode(stdout, "UTF-8", errors="replace")
         else:
             self.stdout = stdout
 
-        if not self.parameters["unicode_stderr"]:
+        if self.parameters["unicode_stderr"]:
             self.stderr = codecs.decode(stderr, "UTF-8", errors="replace")
         else:
             self.stderr = stderr
@@ -117,7 +117,7 @@ class _Test:
     def check_files(self):
         for (pathname, expected_contents) in self.parameters["expected_files"].items():
             try:
-                if not self.parameters["unicode_stdout"]:
+                if self.parameters["unicode_stdout"]:
                     with open(pathname, encoding="UTF-8", errors="replace") as f:
                         actual_contents = f.read()
                 else:
@@ -256,7 +256,7 @@ class _Test:
         self.long_explanation = ""
         if not self.stderr_ok:
             if self.expected_stderr:
-                if not self.parameters["unicode_stderr"]:
+                if self.parameters["unicode_stderr"]:
                     self.long_explanation += self.report_difference(
                         "stderr", self.expected_stderr, self.stderr
                     )
@@ -300,7 +300,7 @@ class _Test:
         ):
             # If we don't have unicode in out stdout, we should check for bad characters
             bad_characters = False
-            if not self.parameters["unicode_stdout"]:
+            if self.parameters["unicode_stdout"]:
                 bad_characters = self.check_bad_characters(
                     self.stdout, expected=self.expected_stdout
                 )
@@ -310,7 +310,7 @@ class _Test:
             # report output differences in a easily readable manner
             # if we don't have unicode input.
             # TODO: improve non-unicode handling
-            if not self.parameters["unicode_stdout"]:
+            if self.parameters["unicode_stdout"]:
                 self.long_explanation += self.report_difference(
                     "output", self.expected_stdout, self.stdout
                 )
@@ -318,7 +318,7 @@ class _Test:
                 self.long_explanation = f"You had 0x{self.stdout.hex()} as stdout. You should have 0x{self.expected_stdout.hex()}\n\n"
 
         if self.stdout_ok and self.stderr_ok and self.file_not_ok:
-            if not self.parameters["unicode_stdout"]:
+            if self.parameters["unicode_stdout"]:
                 self.long_explanation = self.report_difference(
                     self.file_not_ok, self.file_expected, self.file_actual
                 )
@@ -328,12 +328,12 @@ class _Test:
                     f"File {self.file_not_ok} had the following error:\n"
                 )
                 self.long_explanation += (
-                    f"expected: {self.file_expected} actual: {self.file_actual}"
+                    f"expected: 0x{self.file_expected.hex()} actual: 0x{self.file_actual.hex()}\n"
                 )
 
         std_input = self.stdin
         # we don't want to consider newlines when dealing with non-unicode output
-        if self.parameters["unicode_stdin"] is False:
+        if self.parameters["unicode_stdin"]:
             n_input_lines = std_input.count("\n")
         else:
             # TODO: add *proper* else case for non-unicode input

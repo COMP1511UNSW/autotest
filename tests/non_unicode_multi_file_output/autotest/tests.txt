@@ -1,7 +1,5 @@
 files="not_unicode_mult.c"
 program="not_unicode_mult"
 
-# TODO: The values of these parameters need to be flipped everywhere, or else their values changed...
-# TODO: figure out how to get it to print "\x71" in an error message rather than "q"
 # TODO: determine if "unicode_stdout" is the best parameter for files...
-test1 unicode_stdout=True expected_files={"test_file": b"\xff\xa5", "test_file2": b"\xa5\x71\xff\xff\xa5\x71"}
+test1 unicode_stdout=False expected_files={"test_file": b"\xff\xa5", "test_file2": b"\xa5\x71\xff\xff\xa5\x71"}

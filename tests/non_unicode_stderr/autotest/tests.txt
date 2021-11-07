@@ -1,4 +1,4 @@
 files="not_unicode_stderr.c"
 program="not_unicode_stderr"
 
-test_stdout  expected_stderr=b"\xfa\xfa" unicode_stderr=True 
+test_stdout  expected_stderr=b"\xfa\xfa" unicode_stderr=False 

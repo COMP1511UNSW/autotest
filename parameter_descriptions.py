@@ -567,27 +567,27 @@ PARAMETER_LIST += [
     # TODO: Ensure that this parameter always works
     Parameter(
         "unicode_stdin",
-        default=False,
+        default=True,
         # TODO: set to True if this becomes an official parameter.
         show_in_documentation=False,
         description="""
 			New parameter. Describes whether or not the stdin is unicode.
-			Default is False.
+			Default is True.
 		""",
     ),
     Parameter(
         "unicode_stdout",
-        default=False,
+        default=True,
         # TODO: set to True if this becomes an official parameter.
         show_in_documentation=False,
         description="""
 			New parameter. Describes whether or not the stdout is unicode.
-			Default is False.
+			Default is True.
 		""",
     ),
     Parameter(
         "unicode_stderr",
-        default=False,
+        default=True,
         # TODO: set to True if this becomes an official parameter.
         show_in_documentation=False,
         description="""
