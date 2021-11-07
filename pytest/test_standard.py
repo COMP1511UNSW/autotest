@@ -208,6 +208,86 @@ class TestStandard:
             print(p.stdout)
             assert False
 
+    def test_non_unicode_stdout(self):
+        test_folder = "tests/non_unicode_stdout"
+        p = subprocess.run(
+            args=[
+                sys.executable,
+                "./autotest.py",
+                "-D",
+                test_folder,
+                "-a",
+                f"{test_folder}/autotest",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=10,
+            encoding="utf-8",
+        )
+        if not re.search(r" tests passed 0 tests failed *$", p.stdout):
+            print(p.stdout)
+            assert False
+
+    def test_non_unicode_stdout(self):
+        test_folder = "tests/non_unicode_stderr"
+        p = subprocess.run(
+            args=[
+                sys.executable,
+                "./autotest.py",
+                "-D",
+                test_folder,
+                "-a",
+                f"{test_folder}/autotest",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=10,
+            encoding="utf-8",
+        )
+        if not re.search(r" tests passed 0 tests failed *$", p.stdout):
+            print(p.stdout)
+            assert False
+    
+    def test_non_unicode_stderr(self):
+        test_folder = "tests/non_unicode_stderr"
+        p = subprocess.run(
+            args=[
+                sys.executable,
+                "./autotest.py",
+                "-D",
+                test_folder,
+                "-a",
+                f"{test_folder}/autotest",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=10,
+            encoding="utf-8",
+        )
+        if not re.search(r" tests passed 0 tests failed *$", p.stdout):
+            print(p.stdout)
+            assert False
+
+    def test_non_unicode_multi_file_output(self):
+        test_folder = "tests/non_unicode_multi_file_output"
+        p = subprocess.run(
+            args=[
+                sys.executable,
+                "./autotest.py",
+                "-D",
+                test_folder,
+                "-a",
+                f"{test_folder}/autotest",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=10,
+            encoding="utf-8",
+        )
+        if not re.search(r" tests passed 0 tests failed *$", p.stdout):
+            print(p.stdout)
+            assert False
+
     def test_shell(self):
         test_folder = "tests/shell"
         p = subprocess.run(
