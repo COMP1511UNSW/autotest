@@ -154,7 +154,7 @@ class _Test:
                     if actual == bytearray(expected):
                         return None
                     else:
-                        return "Your non-unicode output is not correct."
+                        return "Your non-unicode output is not correct"
                 # handling unicode input
                 if self.compare_strings(actual, expected):
                     return None
@@ -265,6 +265,10 @@ class _Test:
                     self.long_explanation += (
                         f"You should have 0x{self.expected_stderr.hex()}\n\n"
                     )
+                    expected_bits = self.expected_stderr
+                    actual_bits = self.stderr
+                    self.long_explanation += self.report_bit_differences(expected_bits, actual_bits)
+
             elif (
                 self.parameters["dcc_output_checking"]
                 and "Execution stopped because" in self.stderr
@@ -322,6 +326,10 @@ class _Test:
                 self.long_explanation += (
                     f"You should have 0x{self.expected_stdout.hex()}\n\n"
                 )
+                expected_bits = self.expected_stdout
+                actual_bits = self.stdout
+                self.long_explanation += self.report_bit_differences(expected_bits, actual_bits)
+
 
         if self.stdout_ok and self.stderr_ok and self.file_not_ok:
             if self.parameters["unicode_files"]:
@@ -335,6 +343,9 @@ class _Test:
                 )
                 self.long_explanation += f"expected: 0x{self.file_expected.hex()} "
                 self.long_explanation += f"actual: 0x{self.file_actual.hex()}\n"
+                expected_bits = self.file_expected
+                actual_bits = self.file_actual
+                self.long_explanation += self.report_bit_differences(expected_bits, actual_bits)
 
         std_input = self.stdin
         # we don't want to consider newlines when dealing with non-unicode output
@@ -411,6 +422,32 @@ class _Test:
             canonical_actual_plus_newlines,
             **self.parameters,
         )
+
+    # TODO: complete this
+    def report_bit_differences(self, expected, actual):
+        feedback = ""
+
+        # compare bit length
+        expected_len = len(expected)
+        actual_len = len(actual)
+        if expected_len != actual_len:
+            feedback = f"Your output was {actual_len} bytes long. "
+            feedback += f"It should have been {expected} bytes long."
+            return feedback
+            
+        # TODO: fix this algorithm...
+        # get number of bit differences 
+        n_different = 0
+        expected = int(expected.hex(), base=16)
+        actual = int(actual.hex(), base=16)
+        different_bytes = expected ^ actual
+        for i in range(len(str(different_bytes))):
+            if not different_bytes & (1 << i):
+                n_different += 1
+        
+        feedback += f"There were {n_different} different bits between your output and the expected output\n"
+
+        return feedback
 
     def check_bad_characters(self, str, expected=""):
         if re.search(r"[\x00-\x08\x14-\x1f\x7f-\xff]", expected):
