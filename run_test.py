@@ -98,7 +98,7 @@ class _Test:
         self.stderr_ok = not self.short_explanation
 
         self.stdout_ok = not stdout_short_explanation
-        
+
         if not self.short_explanation:
             self.short_explanation = stdout_short_explanation
 
