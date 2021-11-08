@@ -443,7 +443,7 @@ class _Test:
         n_different = 0
         expected = int(expected.hex(), base=16)
         actual = int(actual.hex(), base=16)
-        different_bytes = (expected ^ actual)
+        different_bytes = expected ^ actual
         for i in range(len(str(bin(different_bytes))) - 2):
             if different_bytes & (1 << i):
                 n_different += 1
