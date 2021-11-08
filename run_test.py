@@ -440,14 +440,12 @@ class _Test:
             feedback += f"It should have been {expected} bytes long."
             return feedback
 
-        # TODO: fix this algorithm...
-        # get number of bit differences
         n_different = 0
         expected = int(expected.hex(), base=16)
         actual = int(actual.hex(), base=16)
-        different_bytes = expected ^ actual
-        for i in range(len(str(different_bytes))):
-            if not different_bytes & (1 << i):
+        different_bytes = (expected ^ actual)
+        for i in range(len(str(bin(different_bytes))) - 2):
+            if different_bytes & (1 << i):
                 n_different += 1
 
         feedback += f"There were {n_different} different bits between your output and the expected output\n"
