@@ -93,7 +93,10 @@ def run_coroutine(
     # subtle issue with providing string as input so just write it to a temporary file
     if stdin:
         stdin_stream = tempfile.TemporaryFile()
-        stdin_stream.write(stdin.encode(locale.getpreferredencoding(False)))
+        if parameters["unicode_stdin"]:
+            stdin_stream.write(stdin.encode(locale.getpreferredencoding(False)))
+        else:
+            stdin_stream.write(stdin)
         stdin_stream.seek(0)
     else:
         stdin_stream = subprocess.DEVNULL
@@ -103,6 +106,7 @@ def run_coroutine(
         preexec_fn=set_limits,
         stdin=stdin_stream,
     )
+
     transport, protocol = yield from process
     errors = []
     if max_real_seconds:
