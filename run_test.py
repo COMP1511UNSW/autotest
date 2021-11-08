@@ -394,17 +394,17 @@ class _Test:
             os.environ.update(test_environ)
 
 
-def echo_command_for_string(input):
+def echo_command_for_string(test_input):
     options = []
-    if input and input[-1] == "\n":
-        input = input[0:-1]
+    if test_input and test_input[-1] == "\n":
+        test_input = test_input[:-1]
     else:
         options += ["-n"]
-    echo_string = shlex.quote(input)
-    if "\n" in input[0:-1]:
-        echo_string = echo_string.replace("\\", "\\\\")
+    echo_string = shlex.quote(test_input)
+    if "\n" in test_input[:-1]:
+        echo_string = echo_string.replace("\\", r"\\")
         options += ["-e"]
-    echo_string = echo_string.replace("\n", "\\n")
+    echo_string = echo_string.replace("\n", r"\n")
     command = "echo "
     if options:
         command += " ".join(options) + " "
