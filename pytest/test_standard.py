@@ -288,8 +288,8 @@ class TestStandard:
             print(p.stdout)
             assert False
 
-    def test_non_unicode_multi_file_output(self):
-        test_folder = "tests/non_unicode_multi_file_output"
+    def test_non_unicode_file_output(self):
+        test_folder = "tests/non_unicode_file_output"
         p = subprocess.run(
             args=[
                 sys.executable,
