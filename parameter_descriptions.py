@@ -564,14 +564,13 @@ PARAMETER_LIST += [
 			Not yet implemented: if value is a list it is treated as list of pathname of file(s) containing bytes.
 		""",
     ),
-    # TODO: Ensure that this parameter always works
     Parameter(
         "unicode_stdin",
         default=True,
         # TODO: set to True if this becomes an official parameter.
         show_in_documentation=False,
         description="""
-			New parameter. Describes whether or not the stdin is unicode.
+			New parameter. Describes whether or not the stdin is expected to be unicode.
 			Default is True.
 		""",
     ),
@@ -581,7 +580,7 @@ PARAMETER_LIST += [
         # TODO: set to True if this becomes an official parameter.
         show_in_documentation=False,
         description="""
-			New parameter. Describes whether or not the stdout is unicode.
+			New parameter. Describes whether or not the stdout is expected to be unicode.
 			Default is True.
 		""",
     ),
@@ -591,7 +590,17 @@ PARAMETER_LIST += [
         # TODO: set to True if this becomes an official parameter.
         show_in_documentation=False,
         description="""
-			New parameter. Describes whether or not the stderr is unicode.
+			New parameter. Describes whether or not the stderr is expected to be unicode.
+			Default is False.
+		""",
+    ),
+    Parameter(
+        "unicode_files",
+        default=True,
+        # TODO: set to True if this becomes an official parameter.
+        show_in_documentation=False,
+        description="""
+			New parameter. Describes whether or not output files should be treated as unicode.
 			Default is False.
 		""",
     ),

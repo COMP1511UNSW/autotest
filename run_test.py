@@ -98,7 +98,7 @@ class _Test:
         self.stderr_ok = not self.short_explanation
 
         self.stdout_ok = not stdout_short_explanation
-
+        
         if not self.short_explanation:
             self.short_explanation = stdout_short_explanation
 
@@ -117,7 +117,7 @@ class _Test:
     def check_files(self):
         for (pathname, expected_contents) in self.parameters["expected_files"].items():
             try:
-                if self.parameters["unicode_stdout"]:
+                if self.parameters["unicode_files"]:
                     with open(pathname, encoding="UTF-8", errors="replace") as f:
                         actual_contents = f.read()
                 else:
@@ -324,7 +324,7 @@ class _Test:
                 )
 
         if self.stdout_ok and self.stderr_ok and self.file_not_ok:
-            if self.parameters["unicode_stdout"]:
+            if self.parameters["unicode_files"]:
                 self.long_explanation = self.report_difference(
                     self.file_not_ok, self.file_expected, self.file_actual
                 )
