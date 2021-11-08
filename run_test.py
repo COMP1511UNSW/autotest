@@ -267,7 +267,9 @@ class _Test:
                     )
                     expected_bits = self.expected_stderr
                     actual_bits = self.stderr
-                    self.long_explanation += self.report_bit_differences(expected_bits, actual_bits)
+                    self.long_explanation += self.report_bit_differences(
+                        expected_bits, actual_bits
+                    )
 
             elif (
                 self.parameters["dcc_output_checking"]
@@ -328,8 +330,9 @@ class _Test:
                 )
                 expected_bits = self.expected_stdout
                 actual_bits = self.stdout
-                self.long_explanation += self.report_bit_differences(expected_bits, actual_bits)
-
+                self.long_explanation += self.report_bit_differences(
+                    expected_bits, actual_bits
+                )
 
         if self.stdout_ok and self.stderr_ok and self.file_not_ok:
             if self.parameters["unicode_files"]:
@@ -345,7 +348,9 @@ class _Test:
                 self.long_explanation += f"actual: 0x{self.file_actual.hex()}\n"
                 expected_bits = self.file_expected
                 actual_bits = self.file_actual
-                self.long_explanation += self.report_bit_differences(expected_bits, actual_bits)
+                self.long_explanation += self.report_bit_differences(
+                    expected_bits, actual_bits
+                )
 
         std_input = self.stdin
         # we don't want to consider newlines when dealing with non-unicode output
@@ -434,9 +439,9 @@ class _Test:
             feedback = f"Your output was {actual_len} bytes long. "
             feedback += f"It should have been {expected} bytes long."
             return feedback
-            
+
         # TODO: fix this algorithm...
-        # get number of bit differences 
+        # get number of bit differences
         n_different = 0
         expected = int(expected.hex(), base=16)
         actual = int(actual.hex(), base=16)
@@ -444,7 +449,7 @@ class _Test:
         for i in range(len(str(different_bytes))):
             if not different_bytes & (1 << i):
                 n_different += 1
-        
+
         feedback += f"There were {n_different} different bits between your output and the expected output\n"
 
         return feedback
