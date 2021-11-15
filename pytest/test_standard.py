@@ -308,7 +308,9 @@ class TestStandard:
         expected_output += r"Your non-unicode files had incorrect output\n"
         expected_output += r"File test_file2 had the following error:\n"
         expected_output += r"expected: 0xa571ffffa57f actual: 0xa571ffffa571\n"
-        expected_output += r"There were 3 different bits between your output and the expected output\n"
+        expected_output += (
+            r"There were 3 different bits between your output and the expected output\n"
+        )
         if not re.search(expected_output, p.stdout):
             print(p.stdout)
             assert False
