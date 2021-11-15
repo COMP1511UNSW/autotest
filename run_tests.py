@@ -37,6 +37,11 @@ def run_tests(
     if not args.labels:
         die("nothing to test")
 
+    # TODO: add proper error message
+    if global_parameters["missing_files"]["exist"]:
+        print("Missing files")
+        exit(1)
+
     results = []
     for (label, test) in tests.items():
         if label not in args.labels:
@@ -67,7 +72,7 @@ def run_tests(
     return 1 if n_tests_failed + n_tests_not_run else 0
 
 
-# TO-DO: provide stricter type for previous_errors
+# TODO: provide stricter type for previous_errors
 def run_one_test(
     test: _Test, args: Namespace, file=sys.stdout, previous_errors: Dict[str, Any] = {}
 ) -> int:
