@@ -248,7 +248,6 @@ class TestStandard:
             print(p.stdout)
             assert False
 
-
     def test_non_unicode_stdin(self):
         test_folder = "tests/non_unicode_stdin"
         p = subprocess.run(
