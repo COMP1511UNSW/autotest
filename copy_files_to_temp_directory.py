@@ -21,15 +21,20 @@ def copy_files_to_temp_directory(args, parameters, file=sys.stdout):
     temp_dir = tempfile.mkdtemp()
     atexit.register(cleanup, temp_dir=temp_dir, args=args)
     if parameters["supplied_files_directory"]:
-        result_supplied_dir = copy_directory(parameters["supplied_files_directory"], temp_dir, parameters["files"], parameters["files"].copy())
+        result_supplied_dir = copy_directory(
+            parameters["supplied_files_directory"],
+            temp_dir,
+            parameters["files"],
+            parameters["files"].copy(),
+        )
         # if not result["success"]:
         #     parameters["missing_files"]["exist"] = True
         #     parameters["missing_files"]["files"] = result["files_not_found"]
         #     print("didn't find these??", result["files_not_found"])
-            # error_msg = "Unable to run tests because "
-            # error_msg += f"these files were missing: {' '.join(result['files_not_found'])}"
-            # print(error_msg)
-            # exit(1)
+        # error_msg = "Unable to run tests because "
+        # error_msg += f"these files were missing: {' '.join(result['files_not_found'])}"
+        # print(error_msg)
+        # exit(1)
     result_fetch_sub = fetch_submission(temp_dir, args, parameters)
     os.chdir(temp_dir)
 
@@ -39,8 +44,9 @@ def copy_files_to_temp_directory(args, parameters, file=sys.stdout):
     for expected_file in glob.glob("*.expected_*"):
         os.chmod(expected_file, 0o400)
 
-# TODO: allow this function to detect if specified 
-# required files for the autotest 
+
+# TODO: allow this function to detect if specified
+# required files for the autotest
 # have not been supplied
 def fetch_submission(temp_dir, args, parameters):
     if args.debug:
@@ -57,7 +63,9 @@ def fetch_submission(temp_dir, args, parameters):
                 print_command=args.debug,
             )
     elif args.directory:
-        copy_directory(args.directory, temp_dir, parameters["files"], parameters["files"].copy())
+        copy_directory(
+            args.directory, temp_dir, parameters["files"], parameters["files"].copy()
+        )
     elif args.git:
         os.chdir(temp_dir)
         if args.commit:
@@ -137,9 +145,11 @@ def fetch_submission(temp_dir, args, parameters):
 # exit_status == 1 -> 1 or more tests failed
 # exit_status >- 2, internal error - testing not completed
 
-# return values -> positive/0 == 
+# return values -> positive/0 ==
 # -1 == Not all values found
-def copy_directory(src, dst, expected_files=[], files_not_found=[], symlinks=False, ignore=None):
+def copy_directory(
+    src, dst, expected_files=[], files_not_found=[], symlinks=False, ignore=None
+):
     names = os.listdir(src)
     if ignore is not None:
         ignored_names = ignore(src, names)
@@ -153,7 +163,7 @@ def copy_directory(src, dst, expected_files=[], files_not_found=[], symlinks=Fal
             copystat(src, dst)
         except (WindowsError, OSError):
             pass
-    
+
     for name in names:
         if name in ignored_names:
             continue
@@ -170,7 +180,9 @@ def copy_directory(src, dst, expected_files=[], files_not_found=[], symlinks=Fal
                 linkto = os.readlink(srcname)
                 os.symlink(linkto, dstname)
             elif os.path.isdir(srcname):
-                result = copy_directory(srcname, dstname, expected_files, files_not_found, symlinks, ignore)
+                result = copy_directory(
+                    srcname, dstname, expected_files, files_not_found, symlinks, ignore
+                )
                 files_not_found = result["files_not_found"]
             else:
                 copy2(srcname, dstname)
@@ -179,8 +191,7 @@ def copy_directory(src, dst, expected_files=[], files_not_found=[], symlinks=Fal
             print("Warning:", why, file=sys.stderr)
 
     success = len(files_not_found) == 0
-    return {"success": success, "files_not_found": files_not_found} 
-    
+    return {"success": success, "files_not_found": files_not_found}
 
 
 def cleanup(temp_dir=None, args={}):

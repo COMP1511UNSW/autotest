@@ -781,7 +781,6 @@ PARAMETER_LIST += [
             Workaround to enable run_tests_and_upload_results() to work properly.
 		""",
     ),
-
     """
 		### Parameters specifying resource limits for test
 		
