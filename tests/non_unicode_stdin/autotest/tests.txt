@@ -1,4 +1,4 @@
-files="not_unicode_stdout.c"
-program="not_unicode_stdout"
+files="not_unicode_stdin.c"
+program="not_unicode_stdin"
 
-test_stdout unicode_stdout=False expected_stdout=b"\x55" unicode_stdin=False stdin=b"\xaa"
+test_stdin unicode_stdout=False expected_stdout=b"\x55" unicode_stdin=False stdin=b"\xaa"
