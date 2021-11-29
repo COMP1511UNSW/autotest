@@ -773,14 +773,6 @@ PARAMETER_LIST += [
 
 		""",
     ),
-    Parameter(
-        "missing_files",
-        default={"exist": False},
-        description="""
-			If there are missing files, do not run any tests.
-            Workaround to enable run_tests_and_upload_results() to work properly.
-		""",
-    ),
     """
 		### Parameters specifying resource limits for test
 		

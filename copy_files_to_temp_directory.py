@@ -7,48 +7,31 @@ from termcolor import colored
 
 
 def copy_files_to_temp_directory(args, parameters, file=sys.stdout):
-    # missing_files = [f for f in parameters["files"] if not glob.glob(f)]
-    # if missing_files:
-    #     print(
-    #         "Could not run tests",
-    #         "because these files are missing:",
-    #         colored(" ".join(missing_files), "red"),
-    #         flush=True,
-    #         file=file
-    #     )
-    #     exit(1)
-
     temp_dir = tempfile.mkdtemp()
     atexit.register(cleanup, temp_dir=temp_dir, args=args)
     if parameters["supplied_files_directory"]:
-        result_supplied_dir = copy_directory(
-            parameters["supplied_files_directory"],
-            temp_dir,
-            parameters["files"],
-            parameters["files"].copy(),
-        )
-        # if not result["success"]:
-        #     parameters["missing_files"]["exist"] = True
-        #     parameters["missing_files"]["files"] = result["files_not_found"]
-        #     print("didn't find these??", result["files_not_found"])
-        # error_msg = "Unable to run tests because "
-        # error_msg += f"these files were missing: {' '.join(result['files_not_found'])}"
-        # print(error_msg)
-        # exit(1)
-    result_fetch_sub = fetch_submission(temp_dir, args, parameters)
+        copy_directory(parameters["supplied_files_directory"], temp_dir)
+    
+    fetch_submission(temp_dir, args)
+
+    # check if all expected files are now present.
+    # if not, exit immediately. 
+    result_check_expec = check_expected_files(temp_dir, parameters["files"], parameters["files"].copy())
+    if not result_check_expec["success"]:
+        error_msg = "Unable to run tests because "
+        error_msg += f"these files were missing: {colored(' '.join(result_check_expec['files_not_found']), 'red')}"
+        print(error_msg, file=file)
+        exit(1)
+
     os.chdir(temp_dir)
 
     # added for COMP1521 shell assignment but probably a good idea generally
-    # os.environ['HOME'] = temp_dir
+    # os.environ['HOME'] = temp_dir     
 
     for expected_file in glob.glob("*.expected_*"):
         os.chmod(expected_file, 0o400)
 
-
-# TODO: allow this function to detect if specified
-# required files for the autotest
-# have not been supplied
-def fetch_submission(temp_dir, args, parameters):
+def fetch_submission(temp_dir, args):
     if args.debug:
         print(f"fetch_submission({temp_dir})", file=sys.stderr)
     if args.tarfile:
@@ -63,9 +46,7 @@ def fetch_submission(temp_dir, args, parameters):
                 print_command=args.debug,
             )
     elif args.directory:
-        copy_directory(
-            args.directory, temp_dir, parameters["files"], parameters["files"].copy()
-        )
+        copy_directory(args.directory, temp_dir)
     elif args.git:
         os.chdir(temp_dir)
         if args.commit:
@@ -77,7 +58,7 @@ def fetch_submission(temp_dir, args, parameters):
             print("cd", args.exercise)
             os.chdir(args.exercise)
     else:
-        # FIXME - casn we remove this code
+        # FIXME - can we remove this code
         if (
             os.path.isdir(".git")
             and os.path.isdir(args.exercise)
@@ -145,11 +126,8 @@ def fetch_submission(temp_dir, args, parameters):
 # exit_status == 1 -> 1 or more tests failed
 # exit_status >- 2, internal error - testing not completed
 
-# return values -> positive/0 ==
-# -1 == Not all values found
-def copy_directory(
-    src, dst, expected_files=[], files_not_found=[], symlinks=False, ignore=None
-):
+
+def copy_directory(src, dst, symlinks=False, ignore=None):
     names = os.listdir(src)
     if ignore is not None:
         ignored_names = ignore(src, names)
@@ -163,16 +141,9 @@ def copy_directory(
             copystat(src, dst)
         except (WindowsError, OSError):
             pass
-
     for name in names:
         if name in ignored_names:
             continue
-        # check if all "expected_files" are present...
-        if name in expected_files:
-            try:
-                files_not_found.remove(name)
-            except:
-                pass
         srcname = os.path.join(src, name)
         dstname = os.path.join(dst, name)
         try:
@@ -180,18 +151,12 @@ def copy_directory(
                 linkto = os.readlink(srcname)
                 os.symlink(linkto, dstname)
             elif os.path.isdir(srcname):
-                result = copy_directory(
-                    srcname, dstname, expected_files, files_not_found, symlinks, ignore
-                )
-                files_not_found = result["files_not_found"]
+                copy_directory(srcname, dstname, symlinks, ignore)
             else:
                 copy2(srcname, dstname)
         except OSError as why:
             # we don't want to stop if there is an unreadable file - just produce an error
             print("Warning:", why, file=sys.stderr)
-
-    success = len(files_not_found) == 0
-    return {"success": success, "files_not_found": files_not_found}
 
 
 def cleanup(temp_dir=None, args={}):
@@ -224,3 +189,14 @@ def load_embedded_autotest(exercise):
     with tarfile.open(fileobj=buffer, mode="r|xz") as t:
         t.extractall(temp_dir)
     return os.path.join(temp_dir, "tests.txt")
+
+def check_expected_files(dir, expected_files, files_not_found):
+    for file_ in os.listdir(dir):
+        if file_ in expected_files:
+            files_not_found.remove(file_)
+        full_pathname = os.path.join(dir, file_)
+        if os.path.isdir(full_pathname):
+            check_expected_files(full_pathname, expected_files, files_not_found)
+    
+    success = len(files_not_found) == 0
+    return {"success": success, "files_not_found": files_not_found} 

@@ -63,8 +63,6 @@ def run_autotest():
         )
         return 0
 
-    copy_files_to_temp_directory(args, parameters)
-
     if args.generate_expected_output != "no":
         return generate_expected_output(tests, parameters, args)
 

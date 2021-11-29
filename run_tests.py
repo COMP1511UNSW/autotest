@@ -4,6 +4,7 @@
 import copy, glob, io, os, re, subprocess, sys
 from termcolor import colored as termcolor_colored
 from parse_test_specification import output_file_without_parameters
+from copy_files_to_temp_directory import copy_files_to_temp_directory
 from util import die
 
 # necessary for typehinting
@@ -21,6 +22,8 @@ def run_tests(
     file=sys.stdout,
 ) -> int:
 
+    copy_files_to_temp_directory(args, global_parameters, file=file)
+
     debug = global_parameters["debug"]
     colored = (
         termcolor_colored
@@ -36,11 +39,6 @@ def run_tests(
         die(f"autotest not available for {args.exercise}")
     if not args.labels:
         die("nothing to test")
-
-    # TODO: add proper error message
-    if global_parameters["missing_files"]["exist"]:
-        print("Missing files")
-        exit(1)
 
     results = []
     for (label, test) in tests.items():
