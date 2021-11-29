@@ -35,6 +35,7 @@ def copy_files_to_temp_directory(args, parameters, file=sys.stdout):
 
     return True
 
+
 def fetch_submission(temp_dir, args):
     if args.debug:
         print(f"fetch_submission({temp_dir})", file=sys.stderr)
