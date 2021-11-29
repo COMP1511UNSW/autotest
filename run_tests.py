@@ -22,7 +22,8 @@ def run_tests(
     file=sys.stdout,
 ) -> int:
 
-    copy_files_to_temp_directory(args, global_parameters, file=file)
+    if not copy_files_to_temp_directory(args, global_parameters, file=file):
+        return 1
 
     debug = global_parameters["debug"]
     colored = (

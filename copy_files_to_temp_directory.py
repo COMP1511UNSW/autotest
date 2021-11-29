@@ -5,7 +5,7 @@ from shutil import copy2, copystat
 from util import die
 from termcolor import colored
 
-
+# Returns False if expected files are missing, True otherwise.
 def copy_files_to_temp_directory(args, parameters, file=sys.stdout):
     temp_dir = tempfile.mkdtemp()
     atexit.register(cleanup, temp_dir=temp_dir, args=args)
@@ -22,8 +22,8 @@ def copy_files_to_temp_directory(args, parameters, file=sys.stdout):
     if not result_check_expec["success"]:
         error_msg = "Unable to run tests because "
         error_msg += f"these files were missing: {colored(' '.join(result_check_expec['files_not_found']), 'red')}"
-        print(error_msg, file=file)
-        exit(1)
+        print(error_msg, flush=True, file=file)
+        return False
 
     os.chdir(temp_dir)
 
@@ -33,6 +33,7 @@ def copy_files_to_temp_directory(args, parameters, file=sys.stdout):
     for expected_file in glob.glob("*.expected_*"):
         os.chmod(expected_file, 0o400)
 
+    return True
 
 def fetch_submission(temp_dir, args):
     if args.debug:
