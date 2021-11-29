@@ -11,12 +11,14 @@ def copy_files_to_temp_directory(args, parameters, file=sys.stdout):
     atexit.register(cleanup, temp_dir=temp_dir, args=args)
     if parameters["supplied_files_directory"]:
         copy_directory(parameters["supplied_files_directory"], temp_dir)
-    
+
     fetch_submission(temp_dir, args)
 
     # check if all expected files are now present.
-    # if not, exit immediately. 
-    result_check_expec = check_expected_files(temp_dir, parameters["files"], parameters["files"].copy())
+    # if not, exit immediately.
+    result_check_expec = check_expected_files(
+        temp_dir, parameters["files"], parameters["files"].copy()
+    )
     if not result_check_expec["success"]:
         error_msg = "Unable to run tests because "
         error_msg += f"these files were missing: {colored(' '.join(result_check_expec['files_not_found']), 'red')}"
@@ -26,10 +28,11 @@ def copy_files_to_temp_directory(args, parameters, file=sys.stdout):
     os.chdir(temp_dir)
 
     # added for COMP1521 shell assignment but probably a good idea generally
-    # os.environ['HOME'] = temp_dir     
+    # os.environ['HOME'] = temp_dir
 
     for expected_file in glob.glob("*.expected_*"):
         os.chmod(expected_file, 0o400)
+
 
 def fetch_submission(temp_dir, args):
     if args.debug:
@@ -190,6 +193,7 @@ def load_embedded_autotest(exercise):
         t.extractall(temp_dir)
     return os.path.join(temp_dir, "tests.txt")
 
+
 def check_expected_files(dir, expected_files, files_not_found):
     for file_ in os.listdir(dir):
         if file_ in expected_files:
@@ -197,6 +201,6 @@ def check_expected_files(dir, expected_files, files_not_found):
         full_pathname = os.path.join(dir, file_)
         if os.path.isdir(full_pathname):
             check_expected_files(full_pathname, expected_files, files_not_found)
-    
+
     success = len(files_not_found) == 0
-    return {"success": success, "files_not_found": files_not_found} 
+    return {"success": success, "files_not_found": files_not_found}
