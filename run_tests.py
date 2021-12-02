@@ -26,7 +26,7 @@ def run_tests(
         return 1
 
     if args.generate_expected_output != "no":
-        return generate_expected_output(tests, global_parameters, args)
+        generate_expected_output(tests, global_parameters, args)
 
     debug = global_parameters["debug"]
     colored = (
