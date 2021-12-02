@@ -22,12 +22,6 @@ def run_tests(
     file=sys.stdout,
 ) -> int:
 
-    if not copy_files_to_temp_directory(args, global_parameters, file=file):
-        return 1
-
-    if args.generate_expected_output != "no":
-        generate_expected_output(tests, global_parameters, args)
-
     debug = global_parameters["debug"]
     colored = (
         termcolor_colored
@@ -43,6 +37,14 @@ def run_tests(
         die(f"autotest not available for {args.exercise}")
     if not args.labels:
         die("nothing to test")
+
+    # If missing files exist, abort function and return 1
+    missing_files = global_parameters["missing_files"]
+    if len(missing_files):
+        error_msg = "Unable to run tests because "
+        error_msg += f"these files were missing: {colored(' '.join(missing_files), 'red')}"
+        print(error_msg, flush=True, file=file)
+        return 1
 
     results = []
     for (label, test) in tests.items():

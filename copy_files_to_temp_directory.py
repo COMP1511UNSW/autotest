@@ -19,11 +19,9 @@ def copy_files_to_temp_directory(args, parameters, file=sys.stdout):
     result_check_expec = check_expected_files(
         temp_dir, parameters["files"], parameters["files"].copy()
     )
+
     if not result_check_expec["success"]:
-        error_msg = "Unable to run tests because "
-        error_msg += f"these files were missing: {colored(' '.join(result_check_expec['files_not_found']), 'red')}"
-        print(error_msg, flush=True, file=file)
-        return False
+        parameters["missing_files"] = result_check_expec['files_not_found']
 
     os.chdir(temp_dir)
 
@@ -32,8 +30,6 @@ def copy_files_to_temp_directory(args, parameters, file=sys.stdout):
 
     for expected_file in glob.glob("*.expected_*"):
         os.chmod(expected_file, 0o400)
-
-    return True
 
 
 def fetch_submission(temp_dir, args):
