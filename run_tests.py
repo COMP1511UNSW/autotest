@@ -25,6 +25,9 @@ def run_tests(
     if not copy_files_to_temp_directory(args, global_parameters, file=file):
         return 1
 
+    if args.generate_expected_output != "no":
+        return generate_expected_output(tests, global_parameters, args)
+
     debug = global_parameters["debug"]
     colored = (
         termcolor_colored
