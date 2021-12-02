@@ -19,7 +19,7 @@ if __name__ == "__main__":
 from util import AutotestException
 from command_line_arguments import process_arguments
 from copy_files_to_temp_directory import copy_files_to_temp_directory
-from run_tests import run_tests, generate_expected_output
+from run_tests import run_tests
 from upload_results import run_tests_and_upload_results
 
 
@@ -62,9 +62,6 @@ def run_autotest():
             )
         )
         return 0
-
-    if args.generate_expected_output != "no":
-        return generate_expected_output(tests, parameters, args)
 
     if parameters.get("upload_url", ""):
         return run_tests_and_upload_results(tests, parameters, args)
