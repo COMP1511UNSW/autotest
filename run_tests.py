@@ -4,6 +4,7 @@
 import copy, glob, io, os, re, subprocess, sys
 from termcolor import colored as termcolor_colored
 from parse_test_specification import output_file_without_parameters
+from copy_files_to_temp_directory import copy_files_to_temp_directory
 from util import die
 
 # necessary for typehinting
@@ -37,6 +38,16 @@ def run_tests(
     if not args.labels:
         die("nothing to test")
 
+    # If missing files exist, abort function and return 1
+    missing_files = global_parameters["missing_files"]
+    if len(missing_files):
+        error_msg = "Unable to run tests because "
+        error_msg += (
+            f"these files were missing: {colored(' '.join(missing_files), 'red')}"
+        )
+        print(error_msg, flush=True, file=file)
+        return 1
+
     results = []
     for (label, test) in tests.items():
         if label not in args.labels:
@@ -67,7 +78,7 @@ def run_tests(
     return 1 if n_tests_failed + n_tests_not_run else 0
 
 
-# TO-DO: provide stricter type for previous_errors
+# TODO: provide stricter type for previous_errors
 def run_one_test(
     test: _Test, args: Namespace, file=sys.stdout, previous_errors: Dict[str, Any] = {}
 ) -> int:
