@@ -21,7 +21,7 @@ def copy_files_to_temp_directory(args, parameters, file=sys.stdout):
     )
 
     if not result_check_expec["success"]:
-        parameters["missing_files"] = result_check_expec['files_not_found']
+        parameters["missing_files"] = result_check_expec["files_not_found"]
 
     os.chdir(temp_dir)
 

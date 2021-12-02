@@ -42,7 +42,9 @@ def run_tests(
     missing_files = global_parameters["missing_files"]
     if len(missing_files):
         error_msg = "Unable to run tests because "
-        error_msg += f"these files were missing: {colored(' '.join(missing_files), 'red')}"
+        error_msg += (
+            f"these files were missing: {colored(' '.join(missing_files), 'red')}"
+        )
         print(error_msg, flush=True, file=file)
         return 1
 
