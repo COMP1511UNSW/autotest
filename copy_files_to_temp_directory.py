@@ -3,14 +3,26 @@
 import atexit, glob, io, os, pkgutil, re, shutil, subprocess, sys, tarfile, tempfile
 from shutil import copy2, copystat
 from util import die
+from termcolor import colored
 
-
-def copy_files_to_temp_directory(args, parameters):
+# Returns False if expected files are missing, True otherwise.
+def copy_files_to_temp_directory(args, parameters, file=sys.stdout):
     temp_dir = tempfile.mkdtemp()
     atexit.register(cleanup, temp_dir=temp_dir, args=args)
     if parameters["supplied_files_directory"]:
         copy_directory(parameters["supplied_files_directory"], temp_dir)
+
     fetch_submission(temp_dir, args)
+
+    # check if all expected files are now present.
+    # if not, exit immediately.
+    result_check_expec = check_expected_files(
+        temp_dir, parameters["files"], parameters["files"].copy()
+    )
+
+    if not result_check_expec["success"]:
+        parameters["missing_files"] = result_check_expec["files_not_found"]
+
     os.chdir(temp_dir)
 
     # added for COMP1521 shell assignment but probably a good idea generally
@@ -47,7 +59,7 @@ def fetch_submission(temp_dir, args):
             print("cd", args.exercise)
             os.chdir(args.exercise)
     else:
-        # FIXME - casn we remove this code
+        # FIXME - can we remove this code
         if (
             os.path.isdir(".git")
             and os.path.isdir(args.exercise)
@@ -178,3 +190,15 @@ def load_embedded_autotest(exercise):
     with tarfile.open(fileobj=buffer, mode="r|xz") as t:
         t.extractall(temp_dir)
     return os.path.join(temp_dir, "tests.txt")
+
+
+def check_expected_files(dir, expected_files, files_not_found):
+    for file_ in os.listdir(dir):
+        if file_ in expected_files:
+            files_not_found.remove(file_)
+        full_pathname = os.path.join(dir, file_)
+        if os.path.isdir(full_pathname):
+            check_expected_files(full_pathname, expected_files, files_not_found)
+
+    success = len(files_not_found) == 0
+    return {"success": success, "files_not_found": files_not_found}

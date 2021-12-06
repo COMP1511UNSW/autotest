@@ -54,7 +54,11 @@ def zip_files_for_upload(stream, tests, parameters, args):
             zf.writestr(test.label + ".passed", "1" if test.passed else "")
         except AttributeError:
             pass
-    for filename in ["autotest.log"] + list(set(args.file | args.optional_files)):
+
+    # don't zip files that are supplied in autotest
+    supplied = os.listdir(parameters["supplied_files_directory"])
+    upload_files = set(args.file | args.optional_files).difference(supplied)
+    for filename in ["autotest.log"] + list(upload_files):
         try:
             bytes_uploaded += os.path.getsize(filename)
             if bytes_uploaded > parameters["upload_max_bytes"]:
