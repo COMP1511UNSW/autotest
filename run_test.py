@@ -12,11 +12,13 @@ from termcolor import colored as termcolor_colored
 class InternalError(Exception):
     pass
 
+
 # TODO
 # everywhere .hex() is used to convert it to non-unicode IO,
 # feed it first to the helper function i am writing
 
 # indeed, ensure that all prints are printed correctly
+
 
 class _Test:
     def __init__(self, autotest_dir, **parameters):
@@ -356,7 +358,7 @@ class _Test:
         # we don't want to consider newlines when dealing with non-unicode output
         if self.parameters["unicode_stdin"]:
             n_input_lines = std_input.count("\n")
-    
+
         if self.parameters["show_stdin"]:
             if unicode_stdin and std_input and n_input_lines < 32:
                 self.long_explanation += (
@@ -368,10 +370,8 @@ class _Test:
                     )
             elif (not unicode_stdin) and std_input:
                 # TODO: make this print nicer
-                self.long_explanation += (
-                    f"\nThe input for this test was:\n{colored(std_input.hex(), 'yellow')}\n"
-                )
-        
+                self.long_explanation += f"\nThe input for this test was:\n{colored(std_input.hex(), 'yellow')}\n"
+
         if self.parameters["show_reproduce_command"]:
             indent = "  "
             self.long_explanation += (
@@ -393,7 +393,9 @@ class _Test:
                     # TODO: make this print better
                     # TODO: write tests for this
                     print(f"The type of std_input is: {type(std_input)}")
-                    echo_command = "echo " + "'" + self.insert_hex_slash_x(std_input[1:].hex()) 
+                    echo_command = (
+                        "echo " + "'" + self.insert_hex_slash_x(std_input[1:].hex())
+                    )
 
                 if not self.stdin_file_name() or len(echo_command) < 128:
                     if "shell" in self.parameters and (
@@ -494,7 +496,7 @@ class _Test:
 
     # inserts \x into a hex string, useful for printing sometimes
     def insert_hex_slash_x(self, string):
-        return "\\x" + "\\x".join(string[i:i + 2] for i in range(0, len(string), 2))
+        return "\\x" + "\\x".join(string[i : i + 2] for i in range(0, len(string), 2))
 
     def is_true(self, parameter):
         if parameter not in self.parameters:
@@ -524,4 +526,3 @@ def echo_command_for_string(test_input):
     if options:
         command += " ".join(options) + " "
     return command + echo_string
-
