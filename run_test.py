@@ -12,6 +12,11 @@ from termcolor import colored as termcolor_colored
 class InternalError(Exception):
     pass
 
+# TODO
+# everywhere .hex() is used to convert it to non-unicode IO,
+# feed it first to the helper function i am writing
+
+# indeed, ensure that all prints are printed correctly
 
 class _Test:
     def __init__(self, autotest_dir, **parameters):
@@ -142,10 +147,6 @@ class _Test:
             print("expected:", expected[0:256] if expected else "")
         if actual:
             if expected:
-                # TODO: Make this better. May require new params.
-                # FIXME.
-                # probably only need to check for bytearray; I've put both for completeness.
-
                 # Handling non-unicode IO
                 if type(actual) in (bytearray, bytes) or type(expected) in (
                     bytearray,
@@ -176,7 +177,6 @@ class _Test:
             else:
                 return None
 
-    # TODO: get this to work with non-unicode input
     def make_string_canonical(self, raw_str, keep_all_lines=False):
         s = re.sub("\r\n?", "\n", raw_str)
         filter = self.parameters.get("postprocess_output_command", None)
@@ -232,7 +232,6 @@ class _Test:
         path = re.sub(r"/tmp_amd/\w+/export/\w+/\d/(\w+)", r"/home/\1", path)
         return path
 
-    # TODO: make this work better (and fully, as it is incomplete) with non-unicode IO
     def get_long_explanation(self):
         if self.debug:
             print(
@@ -318,7 +317,6 @@ class _Test:
                 self.parameters["show_diff"] = False
             # report output differences in a easily readable manner
             # if we don't have unicode input.
-            # TODO: improve non-unicode handling
             if self.parameters["unicode_stdout"]:
                 self.long_explanation += self.report_difference(
                     "output", self.expected_stdout, self.stdout
@@ -353,15 +351,14 @@ class _Test:
                 )
 
         std_input = self.stdin
+        unicode_stdin = self.parameters["unicode_stdin"]
+
         # we don't want to consider newlines when dealing with non-unicode output
         if self.parameters["unicode_stdin"]:
             n_input_lines = std_input.count("\n")
-        else:
-            # TODO: add *proper* else case for non-unicode input
-            return self.long_explanation
-
+    
         if self.parameters["show_stdin"]:
-            if std_input and n_input_lines < 32:
+            if unicode_stdin and std_input and n_input_lines < 32:
                 self.long_explanation += (
                     f"\nThe input for this test was:\n{colored(std_input, 'yellow')}\n"
                 )
@@ -369,7 +366,12 @@ class _Test:
                     self.long_explanation += (
                         "Note: last character in above input is not '\\n'\n\n"
                     )
-
+            elif (not unicode_stdin) and std_input:
+                # TODO: make this print nicer
+                self.long_explanation += (
+                    f"\nThe input for this test was:\n{colored(std_input.hex(), 'yellow')}\n"
+                )
+        
         if self.parameters["show_reproduce_command"]:
             indent = "  "
             self.long_explanation += (
@@ -385,7 +387,14 @@ class _Test:
                 else self.command
             )
             if std_input:
-                echo_command = echo_command_for_string(input)
+                if unicode_stdin:
+                    echo_command = echo_command_for_string(std_input)
+                else:
+                    # TODO: make this print better
+                    # TODO: write tests for this
+                    print(f"The type of std_input is: {type(std_input)}")
+                    echo_command = "echo " + "'" + self.insert_hex_slash_x(std_input[1:].hex()) 
+
                 if not self.stdin_file_name() or len(echo_command) < 128:
                     if "shell" in self.parameters and (
                         ";" in command or "&" in command or "|" in command
@@ -405,7 +414,6 @@ class _Test:
             self.long_explanation += colored(command + "\n", "blue")
         return self.long_explanation
 
-    # TODO: make this work with non-unicode input
     def report_difference(self, name, expected, actual):
         if self.debug:
             print(f"report_difference({name}, '{expected}', '{actual}')")
@@ -428,7 +436,6 @@ class _Test:
             **self.parameters,
         )
 
-    # TODO: complete this
     def report_bit_differences(self, expected, actual):
         feedback = ""
 
@@ -485,6 +492,10 @@ class _Test:
             return explanation
         return None
 
+    # inserts \x into a hex string, useful for printing sometimes
+    def insert_hex_slash_x(self, string):
+        return "\\x" + "\\x".join(string[i:i + 2] for i in range(0, len(string), 2))
+
     def is_true(self, parameter):
         if parameter not in self.parameters:
             return None
@@ -513,3 +524,4 @@ def echo_command_for_string(test_input):
     if options:
         command += " ".join(options) + " "
     return command + echo_string
+
