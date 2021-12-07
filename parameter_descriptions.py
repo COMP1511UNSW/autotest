@@ -526,7 +526,7 @@ def interpolate_file(e, parameter_name, parameters):
     """
     if not e:
         return ""
-    if isinstance(e, str) or isinstance(e, bytes): 
+    if isinstance(e, str) or isinstance(e, bytes):
         return e
     if not isinstance(e, list):
         raise TestSpecificationError("invalid type for value in {parameter_name}")
