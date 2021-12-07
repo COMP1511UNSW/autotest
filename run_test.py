@@ -382,10 +382,14 @@ class _Test:
                 if unicode_stdin:
                     echo_command = echo_command_for_string(std_input)
                 else:
+<<<<<<< HEAD
                     # TODO: see if there's a better way to do this?
                     echo_command = (
                         "echo " + "'" + self.insert_hex_slash_x(std_input[1:].hex())
                     )
+=======
+                    echo_command = "echo -n" + "'" + self.insert_hex_slash_x(std_input[1:].hex()) 
+>>>>>>> 8f71929 (Don't add newline when printing reproduce command for non-unicode stdin)
 
                 if not self.stdin_file_name() or len(echo_command) < 128:
                     if "shell" in self.parameters and (
