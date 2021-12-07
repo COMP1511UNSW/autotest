@@ -526,13 +526,7 @@ def interpolate_file(e, parameter_name, parameters):
     """
     if not e:
         return ""
-    # TODO: ensure this change is appropriate
-    if isinstance(e, str):
-        return e
-    if isinstance(e, bytes):
-        # TODO: automatically handle determining if parameter is non-unicode?
-        # This would place less responsibility on the test writer,
-        # => a good change?
+    if isinstance(e, str) or isinstance(e, bytes): 
         return e
     if not isinstance(e, list):
         raise TestSpecificationError("invalid type for value in {parameter_name}")
@@ -567,41 +561,37 @@ PARAMETER_LIST += [
     Parameter(
         "unicode_stdin",
         default=True,
-        # TODO: set to True if this becomes an official parameter.
-        show_in_documentation=False,
+        show_in_documentation=True,
         description="""
-			New parameter. Describes whether or not the stdin is expected to be unicode.
+			Whether or not the specified stdin should be treated as unicode.
 			Default is True.
 		""",
     ),
     Parameter(
         "unicode_stdout",
         default=True,
-        # TODO: set to True if this becomes an official parameter.
-        show_in_documentation=False,
+        show_in_documentation=True,
         description="""
-			New parameter. Describes whether or not the stdout is expected to be unicode.
+			Whether or not the program's stdout should be treated as unicode.
 			Default is True.
 		""",
     ),
     Parameter(
         "unicode_stderr",
         default=True,
-        # TODO: set to True if this becomes an official parameter.
-        show_in_documentation=False,
+        show_in_documentation=True,
         description="""
-			New parameter. Describes whether or not the stderr is expected to be unicode.
-			Default is False.
+			Whether or not the program's stderr should be treated as unicode.
+			Default is True.
 		""",
     ),
     Parameter(
         "unicode_files",
         default=True,
-        # TODO: set to True if this becomes an official parameter.
-        show_in_documentation=False,
+        show_in_documentation=True,
         description="""
-			New parameter. Describes whether or not output files should be treated as unicode.
-			Default is False.
+			Describes whether or not output files should be treated as unicode.
+			Default is True.
 		""",
     ),
     Parameter(
