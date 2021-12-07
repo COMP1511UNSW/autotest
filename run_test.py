@@ -382,7 +382,9 @@ class _Test:
                 if unicode_stdin:
                     echo_command = echo_command_for_string(std_input)
                 else:
-                    echo_command = "echo -n" + "'" + self.insert_hex_slash_x(std_input[1:].hex()) 
+                    echo_command = (
+                        "echo -n" + "'" + self.insert_hex_slash_x(std_input[1:].hex())
+                    )
 
                 if not self.stdin_file_name() or len(echo_command) < 128:
                     if "shell" in self.parameters and (
