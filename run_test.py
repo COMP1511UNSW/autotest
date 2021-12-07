@@ -11,6 +11,8 @@ from termcolor import colored as termcolor_colored
 
 class InternalError(Exception):
     pass
+
+
 class _Test:
     def __init__(self, autotest_dir, **parameters):
         debug = parameters["debug"]
@@ -360,10 +362,8 @@ class _Test:
                         "Note: last character in above input is not '\\n'\n\n"
                     )
             elif (not unicode_stdin) and std_input:
-                self.long_explanation += (
-                    f"\nThe input for this test was:\n{colored('0x' + std_input.hex(), 'yellow')}\n"
-                )
-        
+                self.long_explanation += f"\nThe input for this test was:\n{colored('0x' + std_input.hex(), 'yellow')}\n"
+
         if self.parameters["show_reproduce_command"]:
             indent = "  "
             self.long_explanation += (
@@ -383,7 +383,9 @@ class _Test:
                     echo_command = echo_command_for_string(std_input)
                 else:
                     # TODO: see if there's a better way to do this?
-                    echo_command = "echo " + "'" + self.insert_hex_slash_x(std_input[1:].hex()) 
+                    echo_command = (
+                        "echo " + "'" + self.insert_hex_slash_x(std_input[1:].hex())
+                    )
 
                 if not self.stdin_file_name() or len(echo_command) < 128:
                     if "shell" in self.parameters and (
