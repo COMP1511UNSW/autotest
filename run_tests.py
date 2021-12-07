@@ -177,7 +177,7 @@ def run_one_test(
     # pick the best failed test to report
     # if we have errors then should be more informative than incorrect output except memory leaks
     if not failed_individual_tests[-1].stderr_ok and (
-        parameters["unicode_stderr"]
+        not parameters["unicode_stderr"]
         or ("free not called" not in failed_individual_tests[-1].stderr)
     ):
         individual_test = failed_individual_tests[-1]
