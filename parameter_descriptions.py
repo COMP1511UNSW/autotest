@@ -1134,6 +1134,27 @@ PARAMETER_LIST += [
     ),
 ]
 
+# parallelisation parameter options
+PARAMETER_LIST += [
+    # len(os.sched_getaffinity(0)) => for CPU count usable by process running autotest
+    Parameter(
+        "test_threads_max",
+        default=os.cpu_count(),
+        description="""
+            Maximum number of threads (processes) to run autotests in parallel.
+            Defaults to current computer core count.
+        """,
+    ),
+    Parameter(
+        "test_threads_n",
+        default=1,
+        description="""
+            Number of threads (processes) to run autotests in parallel.
+            Defaults to 1 (serial execution).
+        """,
+    ),
+]
+
 
 PARAMETERS = collections.OrderedDict(
     (bv.name, bv) for bv in PARAMETER_LIST if isinstance(bv, Parameter)

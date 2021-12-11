@@ -10,11 +10,14 @@ if __name__ == "__main__":
 
 import json, re, sys, traceback
 from collections import OrderedDict
+import multiprocessing as mp
 
 
 # add autotest directory to module path
+# set start method to spawn (for portability to all 3 major OS)
 if __name__ == "__main__":
     sys.path.append(os.path.dirname(os.path.realpath(__file__)))
+    mp.set_start_method("spawn")
 
 from util import AutotestException
 from command_line_arguments import process_arguments

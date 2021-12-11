@@ -1,11 +1,14 @@
 # run all the tests
 # This code needs extensive revision.
 
-import copy, glob, io, os, re, subprocess, sys
+import copy, glob, io, os, re, subprocess, sys, tempfile
+from contextlib import contextmanager
 from termcolor import colored as termcolor_colored
 from parse_test_specification import output_file_without_parameters
-from copy_files_to_temp_directory import copy_files_to_temp_directory
+from copy_files_to_temp_directory import copy_directory
 from util import die
+import pathos.multiprocessing as mp
+from functools import partial
 
 # necessary for typehinting
 from typing import Dict, List, Any, Union
@@ -13,6 +16,10 @@ from collections.abc import Sequence
 
 from run_test import _Test
 from argparse import Namespace
+
+# pathos multiprocessing is used instead of stdlib multiprocessing due to
+# requirement of passing along file descriptors to child workers with minimal refactor
+# See more here: https://stackoverflow.com/a/36366426
 
 
 def run_tests(
@@ -48,12 +55,16 @@ def run_tests(
         print(error_msg, flush=True, file=file)
         return 1
 
-    results = []
-    for (label, test) in tests.items():
-        if label not in args.labels:
-            continue
-        result = run_one_test(test, args, file=file)
-        results.append(result)
+    # multiprocess tests via multiprocessing pool map
+    thread_count = min(
+        global_parameters["test_threads_n"], global_parameters["test_threads_max"]
+    )
+    pool = mp.ProcessPool(nodes=thread_count)
+    test_list = [test for (label, test) in tests.items() if label in args.labels]
+
+    results = pool.map(partial(run_one_test_wrapper, args=args, file=file), test_list)
+    pool.close()
+    pool.join()
 
     if debug > 3:
         subprocess.call("echo after tests run;ls -l;pwd", shell=True)
@@ -76,6 +87,33 @@ def run_tests(
         print("", n_tests_not_run, "tests could not be run", end="", file=file)
     print(file=file)
     return 1 if n_tests_failed + n_tests_not_run else 0
+
+
+# nice context manager in regards to current directory (not necessary but made everything much easier)
+@contextmanager
+def cwd(path):
+    oldpwd = os.getcwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(oldpwd)
+
+
+# this is cursed but I would prefer to get tempdir cleanup all in one easy place
+def run_one_test_wrapper(
+    test: _Test, args: Namespace, file=sys.stdout, previous_errors: Dict[str, Any] = {}
+) -> int:
+    # transfer test to another temp directory (for parallelisation)
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # transfer over current directory contents to temp_dir
+        copy_directory(os.getcwd(), temp_dir)
+        # run test within temp directory context
+        with cwd(temp_dir):
+            # run the test
+            result = run_one_test(test, args, file=file)
+
+    return result
 
 
 # TODO: provide stricter type for previous_errors
