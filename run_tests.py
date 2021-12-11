@@ -7,7 +7,7 @@ from termcolor import colored as termcolor_colored
 from parse_test_specification import output_file_without_parameters
 from copy_files_to_temp_directory import copy_directory
 from util import die
-import pathos.multiprocessing as mp
+import pathos.multiprocessing as mp  # type: ignore
 from functools import partial
 
 # necessary for typehinting
