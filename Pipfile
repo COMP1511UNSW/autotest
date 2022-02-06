@@ -6,6 +6,7 @@ name = "pypi"
 [packages]
 termcolor = "==1.1.0"
 requests = "*"
+pathos = "*"
 
 [dev-packages]
 black = "*"
