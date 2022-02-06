@@ -176,13 +176,14 @@ def run_one_test(
 
     # pick the best failed test to report
     # if we have errors then should be more informative than incorrect output except memory leaks
-    if (
-        not failed_individual_tests[-1].stderr_ok
-        and "free not called" not in failed_individual_tests[-1].stderr
+    if not failed_individual_tests[-1].stderr_ok and (
+        not parameters["unicode_stderr"]
+        or ("free not called" not in failed_individual_tests[-1].stderr)
     ):
         individual_test = failed_individual_tests[-1]
     else:
         individual_test = failed_individual_tests[0]
+
     long_explanation = individual_test.get_long_explanation()
     # remove hexadecimal constants
     reduced_long_explanation = re.sub(r"0x[0-9a-f]+", "", long_explanation, flags=re.I)

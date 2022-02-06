@@ -1,0 +1,4 @@
+files="not_unicode_stdin.c"
+program="not_unicode_stdin"
+
+test_stdin unicode_stdout=False expected_stdout=b"\x55" unicode_stdin=False stdin=b"\xaa"

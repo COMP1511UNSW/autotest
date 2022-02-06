@@ -10,7 +10,6 @@ from copy_files_to_temp_directory import load_embedded_autotest
 
 EXTRA_HELP = """
 Examples:
-
 autotest lab06                                 # all tests for lab06
 autotest lab08 -l lectures_3 lectures_4        # run specified tests
 """

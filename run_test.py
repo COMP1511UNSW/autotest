@@ -67,8 +67,17 @@ class _Test:
             # weird termination with non-zero exit status seen on some CSE servers
             # ignore this execution and try again
             time.sleep(1)
-        self.stdout = codecs.decode(stdout, "UTF-8", errors="replace")
-        self.stderr = codecs.decode(stderr, "UTF-8", errors="replace")
+
+        if self.parameters["unicode_stdout"]:
+            self.stdout = codecs.decode(stdout, "UTF-8", errors="replace")
+        else:
+            self.stdout = stdout
+
+        if self.parameters["unicode_stderr"]:
+            self.stderr = codecs.decode(stderr, "UTF-8", errors="replace")
+        else:
+            self.stderr = stderr
+
         self.short_explanation = None
         self.long_explanation = None
 
@@ -108,8 +117,12 @@ class _Test:
     def check_files(self):
         for (pathname, expected_contents) in self.parameters["expected_files"].items():
             try:
-                with open(pathname, encoding="UTF-8", errors="replace") as f:
-                    actual_contents = f.read()
+                if self.parameters["unicode_files"]:
+                    with open(pathname, encoding="UTF-8", errors="replace") as f:
+                        actual_contents = f.read()
+                else:
+                    with open(pathname, mode="rb") as f:
+                        actual_contents = f.read()
             except IOError:
                 self.long_explanation = f"Your program was expected to create a file named '{pathname}' and did not\n"
                 actual_contents = ""
@@ -129,6 +142,16 @@ class _Test:
             print("expected:", expected[0:256] if expected else "")
         if actual:
             if expected:
+                # Handling non-unicode IO
+                if type(actual) in (bytearray, bytes) or type(expected) in (
+                    bytearray,
+                    bytes,
+                ):
+                    if actual == bytearray(expected):
+                        return None
+                    else:
+                        return "Your non-unicode output is not correct"
+                # handling unicode input
                 if self.compare_strings(actual, expected):
                     return None
                 else:
@@ -227,9 +250,21 @@ class _Test:
         self.long_explanation = ""
         if not self.stderr_ok:
             if self.expected_stderr:
-                self.long_explanation += self.report_difference(
-                    "stderr", self.expected_stderr, self.stderr
-                )
+                if self.parameters["unicode_stderr"]:
+                    self.long_explanation += self.report_difference(
+                        "stderr", self.expected_stderr, self.stderr
+                    )
+                else:
+                    self.long_explanation = f"You had 0x{self.stderr.hex()} as stderr. "
+                    self.long_explanation += (
+                        f"You should have 0x{self.expected_stderr.hex()}\n\n"
+                    )
+                    expected_bits = self.expected_stderr
+                    actual_bits = self.stderr
+                    self.long_explanation += self.report_bit_differences(
+                        expected_bits, actual_bits
+                    )
+
             elif (
                 self.parameters["dcc_output_checking"]
                 and "Execution stopped because" in self.stderr
@@ -266,23 +301,59 @@ class _Test:
         if not self.stdout_ok and (
             self.parameters["show_stdout_if_errors"] or self.stderr_ok
         ):
-            bad_characters = self.check_bad_characters(
-                self.stdout, expected=self.expected_stdout
-            )
+            # If we don't have unicode in out stdout, we should check for bad characters
+            bad_characters = False
+            if self.parameters["unicode_stdout"]:
+                bad_characters = self.check_bad_characters(
+                    self.stdout, expected=self.expected_stdout
+                )
             if bad_characters:
                 self.long_explanation += bad_characters
                 self.parameters["show_diff"] = False
-            self.long_explanation += self.report_difference(
-                "output", self.expected_stdout, self.stdout
-            )
+            # report output differences in a easily readable manner
+            # if we don't have unicode input.
+            if self.parameters["unicode_stdout"]:
+                self.long_explanation += self.report_difference(
+                    "output", self.expected_stdout, self.stdout
+                )
+            else:
+                self.long_explanation = f"You had 0x{self.stdout.hex()} as stdout. "
+                self.long_explanation += (
+                    f"You should have 0x{self.expected_stdout.hex()}\n\n"
+                )
+                expected_bits = self.expected_stdout
+                actual_bits = self.stdout
+                self.long_explanation += self.report_bit_differences(
+                    expected_bits, actual_bits
+                )
+
         if self.stdout_ok and self.stderr_ok and self.file_not_ok:
-            self.long_explanation = self.report_difference(
-                self.file_not_ok, self.file_expected, self.file_actual
-            )
+            if self.parameters["unicode_files"]:
+                self.long_explanation = self.report_difference(
+                    self.file_not_ok, self.file_expected, self.file_actual
+                )
+            else:
+                self.long_explanation = "Your non-unicode files had incorrect output\n"
+                self.long_explanation += (
+                    f"File {self.file_not_ok} had the following error:\n"
+                )
+                self.long_explanation += f"expected: 0x{self.file_expected.hex()} "
+                self.long_explanation += f"actual: 0x{self.file_actual.hex()}\n"
+                expected_bits = self.file_expected
+                actual_bits = self.file_actual
+                self.long_explanation += self.report_bit_differences(
+                    expected_bits, actual_bits
+                )
+
         std_input = self.stdin
-        n_input_lines = std_input.count("\n")
+        unicode_stdin = self.parameters["unicode_stdin"]
+
+        # we don't want to consider newlines when dealing with non-unicode output
+        if self.parameters["unicode_stdin"]:
+            n_input_lines = std_input.count("\n")
+
         if self.parameters["show_stdin"]:
-            if std_input and n_input_lines < 32:
+            if unicode_stdin and std_input and n_input_lines < 32:
                 self.long_explanation += (
                     f"\nThe input for this test was:\n{colored(std_input, 'yellow')}\n"
                 )
@@ -290,6 +361,8 @@ class _Test:
                     self.long_explanation += (
                         "Note: last character in above input is not '\\n'\n\n"
                     )
+            elif (not unicode_stdin) and std_input:
+                self.long_explanation += f"\nThe input for this test was:\n{colored('0x' + std_input.hex(), 'yellow')}\n"
 
         if self.parameters["show_reproduce_command"]:
             indent = "  "
@@ -306,7 +379,13 @@ class _Test:
                 else self.command
             )
             if std_input:
-                echo_command = echo_command_for_string(input)
+                if unicode_stdin:
+                    echo_command = echo_command_for_string(std_input)
+                else:
+                    echo_command = (
+                        "echo -n" + "'" + self.insert_hex_slash_x(std_input[1:].hex())
+                    )
+
                 if not self.stdin_file_name() or len(echo_command) < 128:
                     if "shell" in self.parameters and (
                         ";" in command or "&" in command or "|" in command
@@ -348,6 +427,29 @@ class _Test:
             **self.parameters,
         )
 
+    def report_bit_differences(self, expected, actual):
+        feedback = ""
+
+        # compare bit length
+        expected_len = len(expected)
+        actual_len = len(actual)
+        if expected_len != actual_len:
+            feedback = f"Your output was {actual_len} bytes long. "
+            feedback += f"It should have been {expected_len} bytes long. "
+            return feedback
+
+        n_different = 0
+        expected = int(expected.hex(), base=16)
+        actual = int(actual.hex(), base=16)
+        different_bytes = expected ^ actual
+        for i in range(len(str(bin(different_bytes))) - 2):
+            if different_bytes & (1 << i):
+                n_different += 1
+
+        feedback += f"There were {n_different} different bits between your output and the expected output\n"
+
+        return feedback
+
     def check_bad_characters(self, str, expected=""):
         if re.search(r"[\x00-\x08\x14-\x1f\x7f-\xff]", expected):
             return None
@@ -380,6 +482,10 @@ class _Test:
             explanation += line
             return explanation
         return None
+
+    # inserts \x into a hex string, useful for printing sometimes
+    def insert_hex_slash_x(self, string):
+        return "\\x" + "\\x".join(string[i : i + 2] for i in range(0, len(string), 2))
 
     def is_true(self, parameter):
         if parameter not in self.parameters:

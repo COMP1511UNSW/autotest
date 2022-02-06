@@ -1,0 +1,6 @@
+files="not_unicode_files.c"
+program="not_unicode_files"
+
+test_correct_output unicode_files=False expected_files={"test_file": b"\xff\xa5", "test_file2": b"\xa5\x71\xff\xff\xa5\x71"}
+
+test_incorrect_output unicode_files=False expected_files={"test_file": b"\xff\xa5", "test_file2": b"\xa5\x71\xff\xff\xa5\x7f"}

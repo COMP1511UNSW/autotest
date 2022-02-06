@@ -526,7 +526,7 @@ def interpolate_file(e, parameter_name, parameters):
     """
     if not e:
         return ""
-    if isinstance(e, str):
+    if isinstance(e, str) or isinstance(e, bytes):
         return e
     if not isinstance(e, list):
         raise TestSpecificationError("invalid type for value in {parameter_name}")
@@ -556,6 +556,42 @@ PARAMETER_LIST += [
 			Bytes supplied on stdin for test.<br>
 			Deprocated: stdin is not specified and the file *test_label*`.stdin` exists, its contents are used.<br>
 			Not yet implemented: if value is a list it is treated as list of pathname of file(s) containing bytes.
+		""",
+    ),
+    Parameter(
+        "unicode_stdin",
+        default=True,
+        show_in_documentation=True,
+        description="""
+			Whether or not the specified stdin should be treated as unicode.
+			Default is True.
+		""",
+    ),
+    Parameter(
+        "unicode_stdout",
+        default=True,
+        show_in_documentation=True,
+        description="""
+			Whether or not the program's stdout should be treated as unicode.
+			Default is True.
+		""",
+    ),
+    Parameter(
+        "unicode_stderr",
+        default=True,
+        show_in_documentation=True,
+        description="""
+			Whether or not the program's stderr should be treated as unicode.
+			Default is True.
+		""",
+    ),
+    Parameter(
+        "unicode_files",
+        default=True,
+        show_in_documentation=True,
+        description="""
+			Describes whether or not output files should be treated as unicode.
+			Default is True.
 		""",
     ),
     Parameter(
