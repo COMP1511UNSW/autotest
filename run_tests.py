@@ -28,6 +28,7 @@ def run_tests(
         if global_parameters["colorize_output"]
         else lambda x, *a, **kw: x
     )
+
     if os.path.exists("./compile.sh"):
         if subprocess.call(["./compile.sh"] + args.programs) != 0:
             die("compilation failed")
@@ -38,9 +39,12 @@ def run_tests(
     if not args.labels:
         die("nothing to test")
 
-    # If missing files exist, abort function and return 1
-    missing_files = global_parameters["missing_files"]
-    if len(missing_files):
+    tests_to_run = [test for (label, test) in tests.items() if label in args.labels]
+
+    # If a file needs for all tests is missing, don't run any tests to avoid confusing output
+    files_required_for_all_tests = set.intersection(*[set(test.parameters['files']) for test in tests_to_run])
+    missing_files = [f for f in files_required_for_all_tests if not glob.glob(f)]
+    if missing_files:
         error_msg = "Unable to run tests because "
         error_msg += (
             f"these files were missing: {colored(' '.join(missing_files), 'red')}"
@@ -48,12 +52,7 @@ def run_tests(
         print(error_msg, flush=True, file=file)
         return 1
 
-    results = []
-    for (label, test) in tests.items():
-        if label not in args.labels:
-            continue
-        result = run_one_test(test, args, file=file)
-        results.append(result)
+    results = [run_one_test(test, args, file=file) for test in tests_to_run]
 
     if debug > 3:
         subprocess.call("echo after tests run;ls -l;pwd", shell=True)

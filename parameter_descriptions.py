@@ -820,14 +820,6 @@ PARAMETER_LIST += [
 
 		""",
     ),
-    Parameter(
-        "missing_files",
-        default=[],
-        description="""
- 			List of any files missing that are required for all tests.
-            Is filled in by the `copy_files_to_temp_directory` function.
- 		""",
-    ),
     """
 		### Parameters specifying resource limits for test
 		
