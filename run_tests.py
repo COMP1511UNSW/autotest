@@ -42,7 +42,9 @@ def run_tests(
     tests_to_run = [test for (label, test) in tests.items() if label in args.labels]
 
     # If a file needs for all tests is missing, don't run any tests to avoid confusing output
-    files_required_for_all_tests = set.intersection(*[set(test.parameters['files']) for test in tests_to_run])
+    files_required_for_all_tests = set.intersection(
+        *[set(test.parameters["files"]) for test in tests_to_run]
+    )
     missing_files = [f for f in files_required_for_all_tests if not glob.glob(f)]
     if missing_files:
         error_msg = "Unable to run tests because "

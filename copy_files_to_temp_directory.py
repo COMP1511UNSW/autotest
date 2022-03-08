@@ -181,4 +181,3 @@ def load_embedded_autotest(exercise):
     with tarfile.open(fileobj=buffer, mode="r|xz") as t:
         t.extractall(temp_dir)
     return os.path.join(temp_dir, "tests.txt")
-

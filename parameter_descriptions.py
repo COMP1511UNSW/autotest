@@ -178,16 +178,16 @@ def finalize_list_of_strings(name, value, parameters):
 
 
 def heuristically_default_files(parameters):
-	"""
-		 heuristically infer default for files being run from other parameters
-	"""
-	program = parameters.get('program', '')
-	if '.' in program:
-		return [program]
-	elif program:
-		return [program + '.c']
-	else:
-		return []
+    """
+    heuristically infer default for files being run from other parameters
+    """
+    program = parameters.get("program", "")
+    if "." in program:
+        return [program]
+    elif program:
+        return [program + ".c"]
+    else:
+        return []
 
 
 PARAMETER_LIST += [
