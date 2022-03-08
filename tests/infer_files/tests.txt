@@ -1,0 +1,9 @@
+files=autotest.py
+arguments=-a autotest
+# stop minor updates to autotest output breaking test
+ignore_blank_lines=1
+ignore_case=1
+compare_only_characters=abcdefghijklmnopqrstuvwxyz
+
+1
+1 expected_stdout='dcc -o a a.c\nTest 0 (./a 0) - passed\n1 tests passed 0 tests failed \n'

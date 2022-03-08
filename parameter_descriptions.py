@@ -177,13 +177,24 @@ def finalize_list_of_strings(name, value, parameters):
     return [str(v) for v in value]
 
 
+def heuristically_default_files(parameters):
+	"""
+		 heuristically infer default for files being run from other parameters
+	"""
+	program = parameters.get('program', '')
+	if '.' in program:
+		return [program]
+	elif program:
+		return [program + '.c']
+	else:
+		return []
+
+
 PARAMETER_LIST += [
     "### Parameters specifying files needed for for a test",
     Parameter(
         "files",
-        default=lambda parameters: [parameters["program"] + ".c"]
-        if "." not in parameters["program"]
-        else [parameters["program"]],
+        default=heuristically_default_files,
         finalize=finalize_list_of_strings,
         required_type=list,
         must_be_set=True,
