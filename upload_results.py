@@ -24,7 +24,7 @@ def run_tests_and_upload_results(tests, parameters, args):
     upload_fields["hostname"] = platform.node()
     upload_fields["login"] = getlogin()
 
-    with open("autotest.log", "w") as f:
+    with open("autotest.log", "w", encoding='utf-8') as f:
         exit_status = run_tests(tests, parameters, args, file=Tee(f))
 
     buffer = io.BytesIO()

@@ -71,7 +71,7 @@ def fetch_submission(temp_dir, args):
             os.chdir(temp_dir)
             file = files_to_copy.pop()
             try:
-                with open(file, "w") as f:
+                with open(file, "w", encoding='utf-8') as f:
                     f.write(sys.stdin.read())
             except IOError:
                 die(f"can not create {file}")
@@ -94,7 +94,7 @@ def fetch_submission(temp_dir, args):
                     if re.search("\.[pc].?$", file):
                         try:
                             # Kludge to pick up include files
-                            with open(file) as f:
+                            with open(file, encoding='utf-8') as f:
                                 for line in f:
                                     m = re.search(
                                         r'\b(require|include)\s*[\'"](.*?)[\'"]',

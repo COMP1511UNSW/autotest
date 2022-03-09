@@ -38,7 +38,7 @@ def parse_file(
         initial_parameters["supplied_files_directory"] = (
             os.path.dirname(pathname) or "."
         )
-    with open(pathname, "r") as f:
+    with open(pathname, "r", encoding='utf-8') as f:
         return parse_stream(
             f,
             pathname,
@@ -430,7 +430,7 @@ def output_file_without_parameters(
     comments and white-space are preserved for lines that don't include the specified parameters
 
     """
-    with open(pathname, "r") as f:
+    with open(pathname, "r", encoding='utf-8') as f:
         return output_stream_without_parameters(
             f,
             pathname,

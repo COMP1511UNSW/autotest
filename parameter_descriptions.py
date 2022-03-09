@@ -553,7 +553,7 @@ def read_file(pathname, parameters):
     if not os.path.isabs(pathname):
         pathname = os.path.join(parameters["supplied_files_directory"], pathname)
     try:
-        with open(pathname, encoding="utf-8") as f:
+        with open(pathname, encoding='utf-8') as f:
             return f.read()
     except OSError as e:
         raise TestSpecificationError(f"{pathname}: {e}")
