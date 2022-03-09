@@ -109,16 +109,16 @@ PARAMETER_LIST += [
         default=heuristically_infer_program,
         must_be_set=True,
         description="""
-			The name of script/binary to run for this test.<br>
-			If **`program`** is not specified it is heuristically inferred from **`command`**, if possible.
-		""",
+            The name of script/binary to run for this test.<br>
+            If **`program`** is not specified it is heuristically inferred from **`command`**, if possible.
+        """,
     ),
     Parameter(
         "arguments",
         default=[],
         description="""
-				Command-line arguments for this test. Used only if **`command`** is not specified.
-			""",
+                Command-line arguments for this test. Used only if **`command`** is not specified.
+            """,
     ),
 ]
 
@@ -149,24 +149,24 @@ PARAMETER_LIST += [
         finalize=finalize_command,
         must_be_set=True,
         description="""
-			Command to run for this test.
+            Command to run for this test.
 
-			If **`command`** is a string, it is passed to a shell.<br>
-			If **`command`** is a list, it is executed directly.<br>
-			If **`command`** is not specified and **`program`** is specified,
-			**`command`** is set to a list containing **`program`** with **`arguments`** appended.<br>
-			Otherwise **`command`** is inferred heuristically from the first filename
-			specified in  by parameter **`files`**, if possible.
-			
-		""",
+            If **`command`** is a string, it is passed to a shell.<br>
+            If **`command`** is a list, it is executed directly.<br>
+            If **`command`** is not specified and **`program`** is specified,
+            **`command`** is set to a list containing **`program`** with **`arguments`** appended.<br>
+            Otherwise **`command`** is inferred heuristically from the first filename
+            specified in  by parameter **`files`**, if possible.
+            
+        """,
     ),
     Parameter(
         "shell",
         default=False,
         show_in_documentation=False,
         description="""
-			Deprocated: if **`shell`** is true, **`command`** is run by passing it to a shell.
-		""",
+            Deprocated: if **`shell`** is true, **`command`** is run by passing it to a shell.
+        """,
     ),
 ]
 
@@ -199,12 +199,12 @@ PARAMETER_LIST += [
         required_type=list,
         must_be_set=True,
         description="""
-			Input files required to be supplied for a test.<br>
-			If **`files`** is not specified it is set to the parameter **`program`**
-			with a `.c`  appended iff **`program`** does not contain a '.'.<br>
-			For example if **`files`** is not specified and **`program`** == **`hello`**, **`files`** will be set to `hello.c`,
-			but if **`program`** == `hello.sh` **`files`** will be set to `hello.c` 
-		""",
+            Input files required to be supplied for a test.<br>
+            If **`files`** is not specified it is set to the parameter **`program`**
+            with a `.c`  appended iff **`program`** does not contain a '.'.<br>
+            For example if **`files`** is not specified and **`program`** == **`hello`**, **`files`** will be set to `hello.c`,
+            but if **`program`** == `hello.sh` **`files`** will be set to `hello.c` 
+        """,
     ),
     Parameter(
         "optional_files",
@@ -212,35 +212,35 @@ PARAMETER_LIST += [
         finalize=finalize_list_of_strings,
         required_type=list,
         description="""
-			Input files which may be optionally supplied for a test.
-		""",
+            Input files which may be optionally supplied for a test.
+        """,
     ),
     "### Parameters specifying actions performed prior to test",
     Parameter(
         "check_hash_bang_line",
         default=True,
         description="""
-			Check Perl, Python, Shell scripts have appropriate #! line.
-		""",
+            Check Perl, Python, Shell scripts have appropriate #! line.
+        """,
     ),
     Parameter(
         "pre_compile_command",
         finalize=finalize_command,
         description="""
-			If set **`pre_compile_command`** is executed once before compilation.<br>
-			This is invisible to the user, unless **`pre_compile_command`** produces output.<br>
-			Compilation does not occur if **`pre_compile_command`** has a non-zero exit-status.<br>
-			If **`pre_compile_command`** is a string, it is passed to a shell.<br>
-			If **`pre_compile_command`** is a list, it is executed directly.
-		""",
+            If set **`pre_compile_command`** is executed once before compilation.<br>
+            This is invisible to the user, unless **`pre_compile_command`** produces output.<br>
+            Compilation does not occur if **`pre_compile_command`** has a non-zero exit-status.<br>
+            If **`pre_compile_command`** is a string, it is passed to a shell.<br>
+            If **`pre_compile_command`** is a list, it is executed directly.
+        """,
     ),
     Parameter(
         "pre_compile_command_shell",
         show_in_documentation=False,
         default=False,
         description="""
-			Deprocated: execute **`pre_compile_command`** by passing it to a shell.<br>
-		""",
+            Deprocated: execute **`pre_compile_command`** by passing it to a shell.<br>
+        """,
     ),
 ]
 
@@ -335,19 +335,19 @@ PARAMETER_LIST += [
             "sh": [["bash", "-n"]],
         },
         description="""
-			A dict which supplies a default value for the parameter **`checkers`** based on the suffix for the 
-			the first file specified by  the parameter **`files`**.
-		""",
+            A dict which supplies a default value for the parameter **`checkers`** based on the suffix for the 
+            the first file specified by  the parameter **`files`**.
+        """,
     ),
     Parameter(
         "checkers",
         finalize=finalize_compiler_checker_list,
         description="""
-			List of checkers.  Each checker is run once for each file supplied for a test.  The filename is appended as argument.<br>
-			Checkers are only run once for a file.<br>
-			If checker is a string it is run by passing it to a shell.
-			Deprocated: if the value is a string containing ':' a list is formed by splitting the string at the ':'s.
-		""",
+            List of checkers.  Each checker is run once for each file supplied for a test.  The filename is appended as argument.<br>
+            Checkers are only run once for a file.<br>
+            If checker is a string it is run by passing it to a shell.
+            Deprocated: if the value is a string containing ':' a list is formed by splitting the string at the ':'s.
+        """,
     ),
     Parameter(
         "default_compilers",
@@ -358,32 +358,32 @@ PARAMETER_LIST += [
             "rs": [["rustc"]],
         },
         description="""
-			A dict which supplies a default value for the parameter **`compilers`** based on the suffix for the 
-			the first file specified by  the parameter **`files`**.
-			If '%' is present in a list, it is replaced by the **`program`**.
-		""",
+            A dict which supplies a default value for the parameter **`compilers`** based on the suffix for the 
+            the first file specified by  the parameter **`files`**.
+            If '%' is present in a list, it is replaced by the **`program`**.
+        """,
     ),
     Parameter(
         "compilers",
         finalize=finalize_compiler_checker_list,
         description="""
-			List of compilers + arguments.<br>
-			**`files`** are compiled with each member of list and test is run once for each member of the list.<br>
-			For example, given:
-			```
-			# run all tests twice once compiled with gcc -fsanitize=address, once with clang -fsanitize=memory
-			compilers = [['gcc', '-fsanitize=address'], ['clang', '-fsanitize=memory']] 
-			```
-			Element of the list of compilers can themselves be a list specifying a list of alternative compilers.<br>
-			For example:
-			```
-			# run all tests twice once compiled with gcc -fsanitize=address, once with clang -fsanitize=memory
-			compilers = [[['dcc'], ['clang', '-Wall'], ['gcc', -Wall]]]
-			```
-			The first element of this sub-list where the compiler can be found in PATH is used.<br>
-			If compiler is a string it is run by passing it to a shell.<br>
-			Deprocated: if the value is a string containing ':' a list is formed by splitting the string at the ':'s.
-		""",
+            List of compilers + arguments.<br>
+            **`files`** are compiled with each member of list and test is run once for each member of the list.<br>
+            For example, given:
+            ```
+            # run all tests twice once compiled with gcc -fsanitize=address, once with clang -fsanitize=memory
+            compilers = [['gcc', '-fsanitize=address'], ['clang', '-fsanitize=memory']] 
+            ```
+            Element of the list of compilers can themselves be a list specifying a list of alternative compilers.<br>
+            For example:
+            ```
+            # run all tests twice once compiled with gcc -fsanitize=address, once with clang -fsanitize=memory
+            compilers = [[['dcc'], ['clang', '-Wall'], ['gcc', -Wall]]]
+            ```
+            The first element of this sub-list where the compiler can be found in PATH is used.<br>
+            If compiler is a string it is run by passing it to a shell.<br>
+            Deprocated: if the value is a string containing ':' a list is formed by splitting the string at the ':'s.
+        """,
     ),
     Parameter(
         "default_compiler_args",
@@ -392,19 +392,19 @@ PARAMETER_LIST += [
             "cc": [["-o", "%"]],
         },
         description="""
-			A dict which supplies a default value for the parameter **`compilers`** based on the suffix for the 
-			the first file specified by  the parameter **`files`**.
-			If '%' is present in a list, it is replaced by the **`program`**.
-		""",
+            A dict which supplies a default value for the parameter **`compilers`** based on the suffix for the 
+            the first file specified by  the parameter **`files`**.
+            If '%' is present in a list, it is replaced by the **`program`**.
+        """,
     ),
     Parameter(
         "compiler_args",
         default=[],
         finalize=finalize_compiler_checker_list,
         description="""
-			"List of arguments strings added to every compilation"
-			If '%' is present in a list, it is replaced by the **`program`**.
-		""",
+            "List of arguments strings added to every compilation"
+            If '%' is present in a list, it is replaced by the **`program`**.
+        """,
     ),
 ]
 
@@ -466,44 +466,44 @@ PARAMETER_LIST += [
         "compile_commands",
         finalize=finalize_compile_commands,
         description="""
-			List of compile commands.<br>
-			Test is run once for each member of the list.<br>
-			If command is a string it is run by passing it to a shell.<br>
-			**`compile_commands`** is not normally set directly.<br>
-			If not set, it is formed from **`compilers`** and **`compiler_args`** and **`files`**.<br>
-			In most cases, set these parameters will be more appropriate.
-		""",
+            List of compile commands.<br>
+            Test is run once for each member of the list.<br>
+            If command is a string it is run by passing it to a shell.<br>
+            **`compile_commands`** is not normally set directly.<br>
+            If not set, it is formed from **`compilers`** and **`compiler_args`** and **`files`**.<br>
+            In most cases, set these parameters will be more appropriate.
+        """,
     ),
     Parameter(
         "setup_command",
         finalize=finalize_command,
         description="""
-			If set **`setup_command`** is executed once before a test.<br>
-			This is invisible to the user, unless **`setup_command`** produces output.<br>
-			The test is not run if  **`setup_command`** has a non-zero exit-status.<br>
-			If **`setup_command`** is a string, it is passed to a shell.
-			If **`setup_command`** is a list, it is executed directly.
-		""",
+            If set **`setup_command`** is executed once before a test.<br>
+            This is invisible to the user, unless **`setup_command`** produces output.<br>
+            The test is not run if  **`setup_command`** has a non-zero exit-status.<br>
+            If **`setup_command`** is a string, it is passed to a shell.
+            If **`setup_command`** is a list, it is executed directly.
+        """,
     ),
     Parameter(
         "setup_command_shell",
         show_in_documentation=False,
         default=False,
         description="""
-			Deprocated: execute **`setup_command_shell`** by passing it to a shell.<br>
-		""",
+            Deprocated: execute **`setup_command_shell`** by passing it to a shell.<br>
+        """,
     ),
     "### Parameters specifying inputs for test",
     Parameter(
         "supplied_files_directory",
         required_type=str,
         description="""
-			If set to a non-empty string, any files in this directory are copied to the directory before testing.<br>
-			This directory is also prepended to any relative file pathnames in test specifications.<br>
-			Its default value is the directory containing the test specification file (`tests.txt`).<br>
-			Only one directory is copied for all tests.  This parameter must be set as a global parameter.
-			It is usually specified in a wrapper shell script via -P.
-		""",
+            If set to a non-empty string, any files in this directory are copied to the directory before testing.<br>
+            This directory is also prepended to any relative file pathnames in test specifications.<br>
+            Its default value is the directory containing the test specification file (`tests.txt`).<br>
+            Only one directory is copied for all tests.  This parameter must be set as a global parameter.
+            It is usually specified in a wrapper shell script via -P.
+        """,
     ),
 ]
 
@@ -553,7 +553,7 @@ def read_file(pathname, parameters):
     if not os.path.isabs(pathname):
         pathname = os.path.join(parameters["supplied_files_directory"], pathname)
     try:
-        with open(pathname) as f:
+        with open(pathname, encoding="utf-8") as f:
             return f.read()
     except OSError as e:
         raise TestSpecificationError(f"{pathname}: {e}")
@@ -564,72 +564,72 @@ PARAMETER_LIST += [
         "stdin",
         finalize=finalize_stream,
         description="""
-			Bytes supplied on stdin for test.<br>
-			Deprocated: stdin is not specified and the file *test_label*`.stdin` exists, its contents are used.<br>
-			Not yet implemented: if value is a list it is treated as list of pathname of file(s) containing bytes.
-		""",
+            Bytes supplied on stdin for test.<br>
+            Deprocated: stdin is not specified and the file *test_label*`.stdin` exists, its contents are used.<br>
+            Not yet implemented: if value is a list it is treated as list of pathname of file(s) containing bytes.
+        """,
     ),
     Parameter(
         "unicode_stdin",
         default=True,
         show_in_documentation=True,
         description="""
-			Whether or not the specified stdin should be treated as unicode.
-			Default is True.
-		""",
+            Whether or not the specified stdin should be treated as unicode.
+            Default is True.
+        """,
     ),
     Parameter(
         "unicode_stdout",
         default=True,
         show_in_documentation=True,
         description="""
-			Whether or not the program's stdout should be treated as unicode.
-			Default is True.
-		""",
+            Whether or not the program's stdout should be treated as unicode.
+            Default is True.
+        """,
     ),
     Parameter(
         "unicode_stderr",
         default=True,
         show_in_documentation=True,
         description="""
-			Whether or not the program's stderr should be treated as unicode.
-			Default is True.
-		""",
+            Whether or not the program's stderr should be treated as unicode.
+            Default is True.
+        """,
     ),
     Parameter(
         "unicode_files",
         default=True,
         show_in_documentation=True,
         description="""
-			Describes whether or not output files should be treated as unicode.
-			Default is True.
-		""",
+            Describes whether or not output files should be treated as unicode.
+            Default is True.
+        """,
     ),
     Parameter(
         "stdin_file",
         default="",
         show_in_documentation=False,
         description="""
-			Deprocated: file supplied on stdin for test.<br>
-		""",
+            Deprocated: file supplied on stdin for test.<br>
+        """,
     ),
     Parameter(
         "__environment_original",
         default=lambda p: dict((k, v) for (k, v) in os.environ.items()),
         show_in_documentation=False,
         description="""
-			Internal variable holding original environment.
-		""",
+            Internal variable holding original environment.
+        """,
     ),
     Parameter(
         "environment_kept",
         # guess at variables whose absence might break programs
         default="ARCH|C_CHECK_.*|DCC_.*|DRYRUN_.*|LANG|LANGUAGE|LC_.*|LOGNAME|USER",
         description="""
-			Environment variables are by default deleted to avoid them affecting testing.<br>
-			Environment variables whose entire name matches this regex are not deleted.<br>
-			All other environment variables are deleted.
-		""",
+            Environment variables are by default deleted to avoid them affecting testing.<br>
+            Environment variables whose entire name matches this regex are not deleted.<br>
+            All other environment variables are deleted.
+        """,
     ),
     Parameter(
         "__environment_filtered",
@@ -640,8 +640,8 @@ PARAMETER_LIST += [
         ),
         show_in_documentation=False,
         description="""
-			Internal variable holding filtered original environment.
-		""",
+            Internal variable holding filtered original environment.
+        """,
     ),
 ]
 
@@ -665,36 +665,36 @@ PARAMETER_LIST += [
         },
         finalize=finalize_dict_of_strings,
         description="""
-			Dict specifying values for environment variables.<br>
-			Default:
+            Dict specifying values for environment variables.<br>
+            Default:
 
-			```
-			{
-				'LC_COLLATE' : 'POSIX',
-				'LC_NUMERIC' : 'POSIX',
-				'PERL5LIB' : '.',
-				'HOME' : '.',
-				'PATH' : '/bin:/usr/bin:/usr/local/bin:.:$PATH',
-				}, 
-			```
-			where `$PATH` is the original value of `PATH`.
-			 
-			The environment  variables in **`environment_base`** are set and then,
-			environment  variables specified in **`environment_set`** are set.<bt>
-			This parameter should not normally be used.<bt>
-			The parameter **`environment_set`** should normally be used instead of this parameter.<bt>
-			It is only necessary to specify **`environment_base`** if these variables need to be unset rather than given different values for a test.<bt>
-		""",
+            ```
+            {
+                'LC_COLLATE' : 'POSIX',
+                'LC_NUMERIC' : 'POSIX',
+                'PERL5LIB' : '.',
+                'HOME' : '.',
+                'PATH' : '/bin:/usr/bin:/usr/local/bin:.:$PATH',
+                }, 
+            ```
+            where `$PATH` is the original value of `PATH`.
+             
+            The environment  variables in **`environment_base`** are set and then,
+            environment  variables specified in **`environment_set`** are set.<bt>
+            This parameter should not normally be used.<bt>
+            The parameter **`environment_set`** should normally be used instead of this parameter.<bt>
+            It is only necessary to specify **`environment_base`** if these variables need to be unset rather than given different values for a test.<bt>
+        """,
     ),
     Parameter(
         "environment_set",
         default={},
         finalize=finalize_dict_of_strings,
         description="""
-			Dict specifying environment variables to be set for this test.<br>
-			For example: `environment_set={'answer' : 42 }`<br>
-			This is the parameter that should normally be used to manipulate environment variables. 
-		""",
+            Dict specifying environment variables to be set for this test.<br>
+            For example: `environment_set={'answer' : 42 }`<br>
+            This is the parameter that should normally be used to manipulate environment variables. 
+        """,
     ),
     Parameter(
         "environment",
@@ -707,71 +707,71 @@ PARAMETER_LIST += [
         },
         finalize=finalize_dict_of_strings,
         description="""
-			Dict specifying all environment variables for this test.<br>
-			This parameter should not normally be specified,
-			**`environment_set`** will serve most purposes.<br>
-			By default **`environment`** is formed by taking original environment variables provided to autotest,<br>
-			removing all but those matching the regex in **`environment_variables_kept`**,<br>
-			setting any variables specified in **`environment_base`** and then<br>
-			setting any variables specified in **`environment_set`**.
-			
-		""",
+            Dict specifying all environment variables for this test.<br>
+            This parameter should not normally be specified,
+            **`environment_set`** will serve most purposes.<br>
+            By default **`environment`** is formed by taking original environment variables provided to autotest,<br>
+            removing all but those matching the regex in **`environment_variables_kept`**,<br>
+            setting any variables specified in **`environment_base`** and then<br>
+            setting any variables specified in **`environment_set`**.
+            
+        """,
     ),
     "### Parameters specifying expected output for test",
     Parameter(
         "expected_stdout",
         finalize=finalize_stream,
         description="""
-			Bytes expected on stdout for this test.<br>
-			If value is a list it is treated as list of pathname of file(s) containing expected bytes.<br>
-			Deprocated: if **`expected_stdout`** is not specified and the file *test_label*`.expected_stdout` exists,
-			its contents are used.<br>
-			Not yet implemented: handling of non-unicode output.<br>
-		""",
+            Bytes expected on stdout for this test.<br>
+            If value is a list it is treated as list of pathname of file(s) containing expected bytes.<br>
+            Deprocated: if **`expected_stdout`** is not specified and the file *test_label*`.expected_stdout` exists,
+            its contents are used.<br>
+            Not yet implemented: handling of non-unicode output.<br>
+        """,
     ),
     Parameter(
         "expected_stdout_file",
         show_in_documentation=False,
         default="",
         description="""
-			Deprocated: pathname of file containing bytes expected on stdout for this test.
-		""",
+            Deprocated: pathname of file containing bytes expected on stdout for this test.
+        """,
     ),
     Parameter(
         "expected_stderr",
         finalize=finalize_stream,
         description="""
-			Bytes expected on stderr for this test.<br>
-			If value is a list it is treated as list of pathname of file(s) containing expected bytes.<br>
-			Deprocated: if **`expected_stderr`** is not specified and the file *test_label*`.stderr` exists,
-			its contents are used.<br>
-			Not yet implemented: handling of non-unicode output.
-		""",
+            Bytes expected on stderr for this test.<br>
+            If value is a list it is treated as list of pathname of file(s) containing expected bytes.<br>
+            Deprocated: if **`expected_stderr`** is not specified and the file *test_label*`.stderr` exists,
+            its contents are used.<br>
+            Not yet implemented: handling of non-unicode output.
+        """,
     ),
     Parameter(
         "expected_stderr_file",
         show_in_documentation=False,
         default="",
         description="""
-			Deprocated: pathname of file containing bytes expected on stderr for this test.
-		""",
+            Deprocated: pathname of file containing bytes expected on stderr for this test.
+        """,
     ),
     Parameter(
         "expected_file_name",
         default="",
         description="""
-			Pathname of file expected to exist after this test.<br>
-			Expected contents specified by **`expected_file_contents`**.<br>
-			Use **`expected_files`** to specify creation of multiple files.
-		""",
+            Pathname of file expected to exist after this test.<br>
+            Expected contents specified by **`expected_file_contents`**.<br>
+            Use **`expected_files`** to specify creation of multiple files.
+        """,
     ),
     Parameter(
         "expected_file_contents",
         default="",
         description="""
-			Bytes expected in file **`expected_file_name`**  expected to exist after this test.<br>
-			Not yet implemented: handling of non-unicode output.
-		""",
+            Bytes expected in file **`expected_file_name`**  expected to exist after this test.<br>
+            Not yet implemented: handling of non-unicode output.
+        """,
     ),
 ]
 
@@ -810,23 +810,23 @@ PARAMETER_LIST += [
         default={},
         finalize=finalize_expected_files,
         description="""
-			Dict specified bytes expected to be written to  files.<br>
-			if value is an string, it is specifies bytes expected to be written to that filename.<br>
-			If a value is a list it is treated as list of pathname of file(s) containing expected bytes.<br>
-			For example: this indicates `a file named `answer.txt` should be created containing `42`.
-			`expected_files={"answer.txt":"42\n"}`<br>
-			
-			Not yet implemented: handling of non-unicode output.<br>
+            Dict specified bytes expected to be written to  files.<br>
+            if value is an string, it is specifies bytes expected to be written to that filename.<br>
+            If a value is a list it is treated as list of pathname of file(s) containing expected bytes.<br>
+            For example: this indicates `a file named `answer.txt` should be created containing `42`.
+            `expected_files={"answer.txt":"42\n"}`<br>
+            
+            Not yet implemented: handling of non-unicode output.<br>
 
-		""",
+        """,
     ),
     """
-		### Parameters specifying resource limits for test
-		
-		Resource limits are mostly implemented on via `setrlimit` and more information can be found in its documentation.
-	
-		If a resource limit is exceeded, the test is failed with an explanatory message.
-	""",
+        ### Parameters specifying resource limits for test
+        
+        Resource limits are mostly implemented on via `setrlimit` and more information can be found in its documentation.
+    
+        If a resource limit is exceeded, the test is failed with an explanatory message.
+    """,
 ]
 
 
@@ -845,75 +845,75 @@ PARAMETER_LIST += [
         "max_stdout_bytes",
         finalize=finalize_max_bytes,
         description="""
-			Maximum number of bytes that can be written to *stdout*.
-			
-		""",
+            Maximum number of bytes that can be written to *stdout*.
+            
+        """,
     ),
     Parameter(
         "max_stderr_bytes",
         finalize=finalize_max_bytes,
         description="""
-			Maximum number of bytes that can be written to *stderr*.
-		""",
+            Maximum number of bytes that can be written to *stderr*.
+        """,
     ),
     Parameter(
         "max_real_seconds",
         default=lambda test: test["max_cpu_seconds"] * 20,
         required_type=int,
         description="""
-			Maximum elapsed real time in seconds (0 for no limit).<br>
-			If not specified, defaults to 20 *  **`max_cpu_seconds`**
-		""",
+            Maximum elapsed real time in seconds (0 for no limit).<br>
+            If not specified, defaults to 20 *  **`max_cpu_seconds`**
+        """,
     ),
     Parameter(
         "max_cpu_seconds",
         default=60,
         description="""
-			Maximum CPU time in seconds (0 for no limit).
-		""",
+            Maximum CPU time in seconds (0 for no limit).
+        """,
     ),
     Parameter(
         "max_core_size",
         default=0,
         description="""
-			Maximum size of any core file written in bytes.  
-		""",
+            Maximum size of any core file written in bytes.  
+        """,
     ),
     Parameter(
         "max_stack_bytes",
         default=32000000,
         description="""
-			Maximum stack size in bytes.
-		""",
+            Maximum stack size in bytes.
+        """,
     ),
     Parameter(
         "max_rss_bytes",
         default=100000000,
         description="""
-			Maximum resident set size in bytes.
-		""",
+            Maximum resident set size in bytes.
+        """,
     ),
     Parameter(
         "max_file_size_bytes",
         default=8192000,
         description="""
-			Maximum size of any file created in bytes.
-		""",
+            Maximum size of any file created in bytes.
+        """,
     ),
     Parameter(
         "max_processes",
         default=4096,
         description="""
-			Maximum number of processes the current process may create.
-			Note: unfortunately this is total per user processes not child processes
-		""",
+            Maximum number of processes the current process may create.
+            Note: unfortunately this is total per user processes not child processes
+        """,
     ),
     Parameter(
         "max_open_files",
         default=256,
         description="""
-			Maximum number of files that can be simultaneously open
-		""",
+            Maximum number of files that can be simultaneously open
+        """,
     ),
     " ## Parameters controlling comparison of expected to actual output",
     "These apply to comparision for stdout, stderr, and files",
@@ -921,29 +921,29 @@ PARAMETER_LIST += [
         "ignore_case",
         default=False,
         description="""
-			Ignore case when comparing actual & expected output
-		""",
+            Ignore case when comparing actual & expected output
+        """,
     ),
     Parameter(
         "ignore_whitespace",
         default=False,
         description="""
-			Ignore white space when comparing actual & expected output.
-		""",
+            Ignore white space when comparing actual & expected output.
+        """,
     ),
     Parameter(
         "ignore_trailing_whitespace",
         default=True,
         description="""
-			Ignore white space at end of lines when comparing actual & expected output.
-		""",
+            Ignore white space at end of lines when comparing actual & expected output.
+        """,
     ),
     Parameter(
         "ignore_blank_lines",
         default=False,
         description="""
-			Ignore lines containing only white space when comparing actual & expected output.
-		""",
+            Ignore lines containing only white space when comparing actual & expected output.
+        """,
     ),
     Parameter(
         "ignore_characters",
@@ -953,34 +953,34 @@ PARAMETER_LIST += [
             - set("\n")
         ),
         description="""
-			Ignore these characters when comparing actual & expected output.<br>
-			Ignoring "\n" has no effect, use **`ignore_blank_lines**` to ignore empty lines.<br>
-			Unimplemented: handling of UNICODE. 
-		""",
+            Ignore these characters when comparing actual & expected output.<br>
+            Ignoring "\n" has no effect, use **`ignore_blank_lines**` to ignore empty lines.<br>
+            Unimplemented: handling of UNICODE. 
+        """,
     ),
     Parameter(
         "compare_only_characters",
         description="""
-			Ignore all but these characters and newline when comparing actual & expected output.<br>
-			Unimplemented: handling of UNICODE. 
-		""",
+            Ignore all but these characters and newline when comparing actual & expected output.<br>
+            Unimplemented: handling of UNICODE. 
+        """,
     ),
     Parameter(
         "postprocess_output_command",
         finalize=finalize_command,
         description="""
-			Pass expected and actual output through this command before comparison.<br>
-			If **`command`** is a string, it is passed to a shell.<br>
-			If it is a list it is executed directly.
-		""",
+            Pass expected and actual output through this command before comparison.<br>
+            If **`command`** is a string, it is passed to a shell.<br>
+            If it is a list it is executed directly.
+        """,
     ),
     Parameter(
         "allow_unexpected_stderr",
         default=False,
         description="""
-			Do not fail a test if there is unexpected output on stderr but other expected outputs are correct.<br>
-			This means warning messages don't cause a test to be failed.
-		""",
+            Do not fail a test if there is unexpected output on stderr but other expected outputs are correct.<br>
+            This means warning messages don't cause a test to be failed.
+        """,
     ),
     "### Parameters controlling information printed about test",
     Parameter(
@@ -988,9 +988,9 @@ PARAMETER_LIST += [
         default=lambda parameters: sys.stdout.isatty(),
         required_type=bool,
         description="""
-			If true highlight parts of output using ANSI colour sequences.
-			Default is true if stdout is a terminal
-		""",
+            If true highlight parts of output using ANSI colour sequences.
+            Default is true if stdout is a terminal
+        """,
     ),
 ]
 
@@ -1015,82 +1015,82 @@ PARAMETER_LIST += [
         "description",
         default=default_description,
         description="""
-			String describing test printed with its execution - defaults to **`command`**.
-		""",
+            String describing test printed with its execution - defaults to **`command`**.
+        """,
     ),
     Parameter(
         "show_actual_output",
         default=True,
         description="""
-			If true, the actual output is included in a test failure explanation.
-		""",
+            If true, the actual output is included in a test failure explanation.
+        """,
     ),
     Parameter(
         "show_expected_output",
         default=True,
         description="""
-			If true, the expected output is included in a test failure explanation.
-		""",
+            If true, the expected output is included in a test failure explanation.
+        """,
     ),
     Parameter(
         "show_diff",
         default=True,
         description="""
-			If true, a description of the difference between expected output  is included in a test failure explanation.
-		""",
+            If true, a description of the difference between expected output  is included in a test failure explanation.
+        """,
     ),
     Parameter(
         "show_stdout_if_errors",
         default=False,
         description="""
-			Unless true the actual output is not included in a test failure explanation, when there are unexpected bytes on stderr.
-		""",
+            Unless true the actual output is not included in a test failure explanation, when there are unexpected bytes on stderr.
+        """,
     ),
     Parameter(
         "show_reproduce_command",
         default=True,
         description="""
-			If  true the command to reproduce the test is included  in a test failure explanation
-		""",
+            If  true the command to reproduce the test is included  in a test failure explanation
+        """,
     ),
     Parameter(
         "show_compile_command",
         default=True,
         description="""
-			If true the command to compile the binary for a test is included in the test output.
-		""",
+            If true the command to compile the binary for a test is included in the test output.
+        """,
     ),
     Parameter(
         "show_stdin",
         default=True,
         description="""
-			If  true the stdin is included  in a test failure explanation
-		""",
+            If  true the stdin is included  in a test failure explanation
+        """,
     ),
     Parameter(
         "max_lines_shown",
         default=32,
         description="""
-			Maximum lines included in components of test explanations.
-			Any further lines are elided.
-			Likely to be replaced with improved controls.
-		""",
+            Maximum lines included in components of test explanations.
+            Any further lines are elided.
+            Likely to be replaced with improved controls.
+        """,
     ),
     Parameter(
         "max_line_length_shown",
         default=1024,
         description="""
-			Maximum line lengths included in components of text explanations.
-			Any further characters are elided.
-		""",
+            Maximum line lengths included in components of text explanations.
+            Any further characters are elided.
+        """,
     ),
     Parameter(
         "no_replace_semicolon_reproduce_command",
         default=False,
         description="""
-			If true semicolons are not replaced with newlines in the command to reproduce the test if it is included  in a test failure explanation.<br>
-			Likely to be replaced with improved controls.
-		""",
+            If true semicolons are not replaced with newlines in the command to reproduce the test if it is included  in a test failure explanation.<br>
+            Likely to be replaced with improved controls.
+        """,
     ),
 ]
 
@@ -1131,45 +1131,45 @@ PARAMETER_LIST += [
         "dcc_output_checking",
         finalize=finalize_dcc_output_checking,
         description="""
-			Use dcc's builtin output checking to check for tests's expected output.
-			This is done by setting several environment variables for the test 
-		""",
+            Use dcc's builtin output checking to check for tests's expected output.
+            This is done by setting several environment variables for the test 
+        """,
     ),
     "### Miscellaneous parameters",
     Parameter(
         "upload_url",
         default="",
         description="""
-			Files tested and the output of the tests are uploaded to this URL using a POST request.<br>
-			No more than **`upload_max_bytes`** will be uploaded.
-			Any field/values specified in  **`upload_max_bytes`** will be included in the POST request.
-			In addition 'exercise', 'hostname' and 'login' fields are included in the POST request.<br>
-			A zip archive containing the files tested is passed as the field **`zip`**.<br>
-			This zip archive includes the output of the test in a file named **`autotest.log`**.<br>
-			Only one upload is done for all tests.  This parameter must be set as a global parameter.
-		""",
+            Files tested and the output of the tests are uploaded to this URL using a POST request.<br>
+            No more than **`upload_max_bytes`** will be uploaded.
+            Any field/values specified in  **`upload_max_bytes`** will be included in the POST request.
+            In addition 'exercise', 'hostname' and 'login' fields are included in the POST request.<br>
+            A zip archive containing the files tested is passed as the field **`zip`**.<br>
+            This zip archive includes the output of the test in a file named **`autotest.log`**.<br>
+            Only one upload is done for all tests.  This parameter must be set as a global parameter.
+        """,
     ),
     Parameter(
         "upload_max_bytes",
         default=2048000,
         description="""
-			Maximum number of bytes uploaded if **`upload_url** is set.
-		""",
+            Maximum number of bytes uploaded if **`upload_url** is set.
+        """,
     ),
     Parameter(
         "upload_fields",
         default={},
         finalize=finalize_dict_of_strings,
         description="""
-			Any specified fields/values are added to upload requests.
-		""",
+            Any specified fields/values are added to upload requests.
+        """,
     ),
     Parameter(
         "debug",
         default=0,
         description="""
-			Level of internal debugging output to print.
-		""",
+            Level of internal debugging output to print.
+        """,
     ),
 ]
 
