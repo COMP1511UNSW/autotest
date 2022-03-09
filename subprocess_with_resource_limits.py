@@ -33,7 +33,6 @@ def run_coroutine(
     command,
     stdin=None,
     # these default should be unused - see parameter_descriptions.py for actual defaults
-    shell=False,
     max_real_seconds=None,
     max_core_size=0,
     max_cpu_seconds=60,
@@ -92,6 +91,7 @@ def run_coroutine(
 
     # subtle issue with providing string as input so just write it to a temporary file
     if stdin:
+        # pylint: disable=consider-using-with
         stdin_stream = tempfile.TemporaryFile()
         if parameters["unicode_stdin"]:
             stdin_stream.write(stdin.encode(locale.getpreferredencoding(False)))

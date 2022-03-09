@@ -3,10 +3,9 @@
 import atexit, glob, io, os, pkgutil, re, shutil, subprocess, sys, tarfile, tempfile
 from shutil import copy2, copystat
 from util import die
-from termcolor import colored
 
 # Returns False if expected files are missing, True otherwise.
-def copy_files_to_temp_directory(args, parameters, file=sys.stdout):
+def copy_files_to_temp_directory(args, parameters):
     temp_dir = tempfile.mkdtemp()
     atexit.register(cleanup, temp_dir=temp_dir, args=args)
     if parameters["supplied_files_directory"]:
@@ -71,7 +70,7 @@ def fetch_submission(temp_dir, args):
             os.chdir(temp_dir)
             file = files_to_copy.pop()
             try:
-                with open(file, "w", encoding='utf-8') as f:
+                with open(file, "w", encoding="utf-8") as f:
                     f.write(sys.stdin.read())
             except IOError:
                 die(f"can not create {file}")
@@ -91,10 +90,10 @@ def fetch_submission(temp_dir, args):
                     if os.path.exists(os.path.join(temp_dir, file)):
                         continue
                     shutil.copy(file, temp_dir)
-                    if re.search("\.[pc].?$", file):
+                    if re.search(r"\.[pc].?$", file):
                         try:
                             # Kludge to pick up include files
-                            with open(file, encoding='utf-8') as f:
+                            with open(file, encoding="utf-8") as f:
                                 for line in f:
                                     m = re.search(
                                         r'\b(require|include)\s*[\'"](.*?)[\'"]',
@@ -131,7 +130,7 @@ def copy_directory(src, dst, symlinks=False, ignore=None):
         # we don't want to copy directory permission if the directory exists already
         try:
             copystat(src, dst)
-        except (WindowsError, OSError):
+        except OSError:
             pass
     for name in names:
         if name in ignored_names:
@@ -151,7 +150,7 @@ def copy_directory(src, dst, symlinks=False, ignore=None):
             print("Warning:", why, file=sys.stderr)
 
 
-def cleanup(temp_dir=None, args={}):
+def cleanup(temp_dir=None, args=None):
     if args and args.debug >= 10:
         return
     if temp_dir and temp_dir.startswith("/tmp/"):

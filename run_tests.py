@@ -4,12 +4,10 @@
 import copy, glob, io, os, re, subprocess, sys
 from termcolor import colored as termcolor_colored
 from parse_test_specification import output_file_without_parameters
-from copy_files_to_temp_directory import copy_files_to_temp_directory
 from util import die
 
 # necessary for typehinting
 from typing import Dict, List, Any, Union
-from collections.abc import Sequence
 
 from run_test import _Test
 from argparse import Namespace
@@ -41,7 +39,7 @@ def run_tests(
 
     tests_to_run = [test for (label, test) in tests.items() if label in args.labels]
 
-    # If a file needs for all tests is missing, don't run any tests to avoid confusing output
+    # If a file needed for all tests is missing, don't run any tests to avoid confusing output
     files_required_for_all_tests = set.intersection(
         *[set(test.parameters["files"]) for test in tests_to_run]
     )
@@ -54,7 +52,7 @@ def run_tests(
         print(error_msg, flush=True, file=file)
         return 1
 
-    results = [run_one_test(test, args, file=file) for test in tests_to_run]
+    results = [run_one_test(test, file=file) for test in tests_to_run]
 
     if debug > 3:
         subprocess.call("echo after tests run;ls -l;pwd", shell=True)
@@ -81,7 +79,10 @@ def run_tests(
 
 # TODO: provide stricter type for previous_errors
 def run_one_test(
-    test: _Test, args: Namespace, file=sys.stdout, previous_errors: Dict[str, Any] = {}
+    # pylint: disable=dangerous-default-value
+    test: _Test,
+    file=sys.stdout,
+    previous_errors: Dict[str, Any] = {},
 ) -> int:
     """
     return -1 for test not run, 0 for test failed, 1 for test passed
@@ -293,6 +294,7 @@ def link_program(
     program: str,
     compile_command: List[str],
     test_files: List[str],
+    # pylint: disable=dangerous-default-value
     linked_program: Dict[str, str] = {},
     debug: int = 0,
 ) -> None:
@@ -360,7 +362,10 @@ def get_unique_program_name(
 
 
 def chmod_program(
-    program: str, chmod_cache: Dict[str, bool] = {}, **other_parameters: Dict[str, Any]
+    # pylint: disable=dangerous-default-value
+    program: str,
+    chmod_cache: Dict[str, bool] = {},
+    **_other_parameters: Dict[str, Any],
 ) -> None:
     chmod_str = "chmod " + program
     if chmod_str in chmod_cache:
@@ -368,7 +373,7 @@ def chmod_program(
     try:
         os.chmod(program, 0o700)
         chmod_cache[program] = True
-    except OSError as e:
+    except OSError:
         # if program is produced by compilation, it won't exist
         pass
 
@@ -379,7 +384,7 @@ def provide_multi_language_support(
     files: List[str],
     default_compilers: Dict[str, List[List[str]]],
     debug: int,
-    **other_parameters: Dict[str, Any],
+    **_other_parameters: Dict[str, Any],
 ) -> List[List[str]]:
     """
     provide backwards-compatible support of autotests which accept multiple languages
@@ -403,7 +408,7 @@ def provide_multi_language_support(
         return []
     elif suffix in ["java", "js"]:
         # changed variable name to stop mypy complaing...was f rather than file...
-        with open(filename, "w") as file:
+        with open(filename, "w", encoding="utf-8") as file:
             file.write(
                 f"#!/bin/bash\n{'node' if suffix == 'js' else 'java'} {basename} \"$@\""
             )
@@ -420,10 +425,11 @@ def provide_multi_language_support(
 
 def run_support_command(
     command: List[str],
+    # pylint: disable=dangerous-default-value
     result_cache: Dict[str, bool] = {},
     print_command: bool = False,
     file=sys.stdout,
-    arguments: List[str] = [],
+    arguments: List[str] = None,
     unlink: str = None,
     debug: int = 0,
 ) -> bool:
@@ -441,7 +447,7 @@ def run_support_command(
 
     return True if command has 0 exit status, False otherwise
     """
-
+    arguments = arguments or []
     if isinstance(command, str):
         cmd = command + " " + " ".join(arguments)
         cmd_str = cmd
@@ -481,6 +487,7 @@ def run_support_command(
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         universal_newlines=True,
+        check=False,
     )
     file.write(p.stdout)
 
@@ -497,9 +504,7 @@ def run_support_command(
 
 def generate_expected_output(
     tests: Dict[str, _Test],
-    global_parameters: Dict[str, Any],
     args: Namespace,
-    file=sys.stdout,
 ) -> None:
     """
     generate expected output for tests from supplied solution
@@ -523,10 +528,10 @@ def generate_expected_output(
     print_tests_and_expected_output(tests, args, output)
     new_contents = output.getvalue()
     output.close()
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         old_contents = f.read()
     if old_contents != new_contents:
-        with open(path, "w") as g:
+        with open(path, "w", encoding="utf-8") as g:
             g.write(new_contents)
 
 
@@ -545,13 +550,13 @@ def print_tests_and_expected_output(
 
 def print_expected_output(tests: Dict[str, _Test], args: Namespace, file) -> None:
     # ignore output from tests
-    with open(os.devnull, "w") as dev_null:
+    with open(os.devnull, "w", encoding="utf-8") as dev_null:
         for (label, test) in tests.items():
             if label not in args.labels:
                 continue
             # override any checkers, so expeceted output can be generated from solutions hwich are not permitted
             test.parameters["checkers"] = []
-            run_one_test(test, args, file=dev_null)
+            run_one_test(test, file=dev_null)
             if not hasattr(test, "stdout"):
                 die(f"Test {label} could not be run")
             if test.stdout:

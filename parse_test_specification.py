@@ -23,8 +23,8 @@ ASSIGNMENT = None
 
 def parse_file(
     pathname,
-    initial_parameters={},
-    initial_tests={},
+    initial_parameters=None,
+    initial_tests=None,
     normalize_global_parameters=True,
     debug=0,
 ):
@@ -34,11 +34,13 @@ def parse_file(
     key is test label, value is dict of parameter values for each test
     ordered by first appearance in file
     """
+    if initial_parameters is None:
+        initial_parameters = {}
     if "supplied_files_directory" not in initial_parameters:
         initial_parameters["supplied_files_directory"] = (
             os.path.dirname(pathname) or "."
         )
-    with open(pathname, "r", encoding='utf-8') as f:
+    with open(pathname, "r", encoding="utf-8") as f:
         return parse_stream(
             f,
             pathname,
@@ -52,8 +54,8 @@ def parse_file(
 def parse_string(
     string,
     source_name="<string>",
-    initial_parameters={},
-    initial_tests={},
+    initial_parameters=None,
+    initial_tests=None,
     normalize_global_parameters=True,
     debug=0,
 ):
@@ -73,18 +75,18 @@ def parse_string(
 def parse_stream(
     stream,
     source_name="?",
-    initial_parameters={},
-    initial_tests={},
+    initial_parameters=None,
+    initial_tests=None,
     normalize_global_parameters=True,
     debug=0,
 ):
     """
     equivalent of parse_file for stream
     """
-    tests = collections.OrderedDict(initial_tests)
-    global_parameters = dict(initial_parameters)
+    tests = collections.OrderedDict(initial_tests or {})
+    global_parameters = dict(initial_parameters or {})
     test_local_parameters = collections.defaultdict(set)
-    for (line_number, values, source_lines) in get_line_literals(
+    for (line_number, values, _source_lines) in get_line_literals(
         stream, source_name, global_parameters, debug=debug
     ):
         if values:
@@ -99,11 +101,11 @@ def parse_stream(
                     debug=debug,
                 )
             except TestSpecificationError as e:
-                raise TestSpecificationError(f"{source_name}:{line_number}: {e}")
+                raise TestSpecificationError(f"{source_name}:{line_number}: {e}") from e
             except Exception as e:
                 raise TestSpecificationError(
                     f"{source_name}:{line_number}: internal error - {e}"
-                )
+                ) from e
 
     if debug > 2:
         print("*** pre-nomalize_parameters **")
@@ -275,7 +277,7 @@ def get_line_literals(stream, source_name, parameters, debug=0):
             # continue adding more lines until string/expression is complete
             pass
         except Exception as e:
-            raise TestSpecificationError(f"{source_name}:{line_number}:{e}")
+            raise TestSpecificationError(f"{source_name}:{line_number}:{e}") from e
 
     if source_lines:
         raise TestSpecificationError(
@@ -384,11 +386,11 @@ def stringize(x):
     return x
 
 
-def get_token_characters(token, parameters):
+def get_token_characters(token, parameters=None):
     """return characters of token"""
     if token.type == tokenize.STRING:
         if token.string[0] == "f":
-            return eval(token.string, globals(), parameters)
+            return eval(token.string, globals(), parameters or {})
         else:
             return ast.literal_eval(token.string)
     else:
@@ -398,7 +400,7 @@ def get_token_characters(token, parameters):
 class FakeToken:
     """return a tokenize.TokenInfo look-like formed from 2 adjacent tokens"""
 
-    def __init__(self, token1, token2=None, parameters={}):
+    def __init__(self, token1, token2=None, parameters=None):
         self.type = tokenize.STRING
         self.start = token1.start
         if token2 is None:
@@ -417,9 +419,9 @@ class FakeToken:
 
 def output_file_without_parameters(
     pathname,
-    initial_parameters={},
-    initial_tests={},
-    remove_parameters=["expected_stdin", "expected_stdout"],
+    initial_parameters=None,
+    initial_tests=None,
+    remove_parameters=None,
     debug=0,
     file=sys.stdout,
 ):
@@ -430,7 +432,9 @@ def output_file_without_parameters(
     comments and white-space are preserved for lines that don't include the specified parameters
 
     """
-    with open(pathname, "r", encoding='utf-8') as f:
+    if remove_parameters is None:
+        remove_parameters = ["expected_stdin", "expected_stdout"]
+    with open(pathname, "r", encoding="utf-8") as f:
         return output_stream_without_parameters(
             f,
             pathname,
@@ -454,8 +458,8 @@ def output_stream_without_parameters(
     """
     equivalent of output_file_without_parameters for stream
     """
-    tests = collections.OrderedDict(initial_tests)
-    global_parameters = dict(initial_parameters)
+    tests = collections.OrderedDict(initial_tests or {})
+    global_parameters = dict(initial_parameters or {})
     test_local_parameters = collections.defaultdict(set)
     for (line_number, values, source_lines) in get_line_literals(
         stream, source_name, global_parameters, debug=debug

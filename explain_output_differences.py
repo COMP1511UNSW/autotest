@@ -153,13 +153,13 @@ def explain_output_differences(
             ):
                 n = canonical_actual.count(actual_char)
                 if n == 1:
-                    format = "a '%s' with a '%s' character."
+                    format_str = "a '%s' with a '%s' character."
                 else:
-                    format = "all '%s' characters with '%s' characters."
+                    format_str = "all '%s' characters with '%s' characters."
                 explanation += (
                     f"\nYour program's {name} would be correct if you replaced "
                 )
-                explanation += format % (
+                explanation += format_str % (
                     colored(actual_char, "red"),
                     colored(expected_char, "green"),
                 )
@@ -170,11 +170,11 @@ def explain_output_differences(
             if canonical_actual.replace(actual_char, "") == canonical_expected:
                 n = canonical_actual.count(actual_char)
                 if n == 1:
-                    format = "a '%s' character."
+                    format_str = "a '%s' character."
                 else:
-                    format = "all '%s' characters."
+                    format_str = "all '%s' characters."
                 explanation += f"Your program's {name} would be correct if you removed "
-                explanation += format % (colored(actual_char, "red"))
+                explanation += format_str % (colored(actual_char, "red"))
                 explanation += "\n"
                 return explanation
     if diff_explanation:
@@ -331,22 +331,22 @@ def create_diff(
         if debug:
             print("IndexError: unexpected diff output")
         # unexpected diff output might break above code
-        pass
     return diff_explanation
 
 
 def sanitize_string(
-    str,
+    unsanitized_string,
     leave_tabs=False,
     leave_colorization=False,
     max_lines_shown=32,
     max_line_length_shown=1024,
+    # pylint: disable=dangerous-default-value
     line_color=defaultdict(lambda: ""),
     **parameters,
 ):
     max_lines_shown = int(max_lines_shown)
     max_line_length_shown = int(max_line_length_shown)
-    lines = str.splitlines()
+    lines = unsanitized_string.splitlines()
     append_repeat_message = False
     if len(lines) >= max_lines_shown:
         last_line_index = len(lines) - 1

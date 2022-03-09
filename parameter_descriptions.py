@@ -129,10 +129,10 @@ def finalize_command(parameter_name, value, parameters):
             deprocated_shell_parameter_name = "shell"
         else:
             deprocated_shell_parameter_name = parameter_name + "_shell"
-        l = [str(a) for a in value]
+        strs = [str(a) for a in value]
         if parameters.get(deprocated_shell_parameter_name, None):
-            return " ".join(l)
-        return l
+            return " ".join(strs)
+        return strs
     elif isinstance(value, str):
         return value
     elif value is None:
@@ -171,7 +171,7 @@ PARAMETER_LIST += [
 ]
 
 
-def finalize_list_of_strings(name, value, parameters):
+def finalize_list_of_strings(name, value, _parameters):
     if not isinstance(value, list):
         raise TestSpecificationError(f"invalid value for parameter '{name}': {value}")
     return [str(v) for v in value]
@@ -409,7 +409,7 @@ PARAMETER_LIST += [
 ]
 
 
-def finalize_compile_commands(name, value, parameters):
+def finalize_compile_commands(_name, value, parameters):
 
     # parameter has been set directly
     if isinstance(value, str):
@@ -537,14 +537,14 @@ def interpolate_file(e, parameter_name, parameters):
     """
     if not e:
         return ""
-    if isinstance(e, str) or isinstance(e, bytes):
+    if isinstance(e, (str, bytes)):
         return e
     if not isinstance(e, list):
-        raise TestSpecificationError("invalid type for value in {parameter_name}")
+        raise TestSpecificationError(f"invalid type for value in {parameter_name}")
     contents = ""
     for pathname in e:
         if not isinstance(pathname, str):
-            raise TestSpecificationError("invalid type for value in {parameter_name}")
+            raise TestSpecificationError(f"invalid type for value in {parameter_name}")
         contents += read_file(pathname, parameters)
     return contents
 
@@ -553,10 +553,10 @@ def read_file(pathname, parameters):
     if not os.path.isabs(pathname):
         pathname = os.path.join(parameters["supplied_files_directory"], pathname)
     try:
-        with open(pathname, encoding='utf-8') as f:
+        with open(pathname, encoding="utf-8") as f:
             return f.read()
     except OSError as e:
-        raise TestSpecificationError(f"{pathname}: {e}")
+        raise TestSpecificationError(f"{pathname}: {e}") from e
 
 
 PARAMETER_LIST += [
@@ -646,7 +646,7 @@ PARAMETER_LIST += [
 ]
 
 
-def finalize_dict_of_strings(name, value, parameters):
+def finalize_dict_of_strings(name, value, _parameters):
     if not isinstance(value, dict):
         raise TestSpecificationError(f"invalid value for parameter '{name}': {value}")
     return dict((str(k), str(v)) for (k, v) in value.items())
@@ -1095,7 +1095,7 @@ PARAMETER_LIST += [
 ]
 
 
-def finalize_dcc_output_checking(name, value, parameters):
+def finalize_dcc_output_checking(_name, value, parameters):
     # dcc_output_checking explicitly set to False
     if value is not None and not value_to_bool(value):
         return False
@@ -1218,9 +1218,9 @@ def normalize_parameters(parameters, check_required_parameters_set=True, debug=0
             debug=debug,
         )
     except TestSpecificationError as e:
-        raise TestSpecificationError(f"{error_prefix}: {e}")
+        raise TestSpecificationError(f"{error_prefix}: {e}") from e
     except Exception as e:
-        raise TestSpecificationError(f"{error_prefix}: {e}")
+        raise TestSpecificationError(f"{error_prefix}: {e}") from e
 
 
 def normalize_parameters1(parameters, check_required_parameters_set=True, debug=0):
@@ -1241,11 +1241,6 @@ def set_parameter_aliases(parameters, debug=0):
     for (parameter, value) in list(parameters.items()):
         alias = PARAMETER_ALIASES.get(parameter, "")
         if alias:
-            if alias[0] == "?":
-                continue
-                raise TestSpecificationError(
-                    f"error - not yet implemented parameter '{parameter}'"
-                )
             parameters[alias] = value
         negated_alias = NEGATED_PARAMETER_ALIASES.get(parameter, "")
         if negated_alias:
@@ -1283,10 +1278,10 @@ def coerce_parameter_types(parameters, debug=0):
                     else:
                         new_value = p.required_type(value)
                     parameters[p.name] = new_value
-                except (ValueError, TypeError):
+                except (ValueError, TypeError) as e:
                     raise TestSpecificationError(
                         f"error invalid value for parameter '{p.name}': {value}"
-                    )
+                    ) from e
 
 
 def value_to_bool(value):

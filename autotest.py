@@ -5,8 +5,13 @@
 # try to catch keyboard interrupt in imports
 import os, signal
 
+# don't complain about os._exit
+# pylint: disable=protected-access
+
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, lambda signum, frame: os._exit(2))
+
+# pylint: disable=wrong-import-position
 
 import json, re, sys, traceback
 from collections import OrderedDict
@@ -37,7 +42,7 @@ def main():
             traceback.print_exc(file=sys.stderr)
         sys.exit(2)
     except Exception:
-        etype, evalue, etraceback = sys.exc_info()
+        etype, evalue, _etraceback = sys.exc_info()
         eformatted = "\n".join(traceback.format_exception_only(etype, evalue))
         print(f"{my_name}: internal error: {eformatted}", file=sys.stderr)
         if debug:
@@ -66,7 +71,7 @@ def run_autotest():
     copy_files_to_temp_directory(args, parameters)
 
     if args.generate_expected_output != "no":
-        return generate_expected_output(tests, parameters, args)
+        return generate_expected_output(tests, args)
 
     if parameters.get("upload_url", ""):
         return run_tests_and_upload_results(tests, parameters, args)

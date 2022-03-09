@@ -16,7 +16,7 @@ autotest lab08 -l lectures_3 lectures_4        # run specified tests
 
 
 def process_arguments():
-    (parser, args) = parse_arguments()
+    args = parse_arguments()
 
     test_specification_pathname = find_test_specification(args)
     tests_as_dicts, parameters = parse_file(
@@ -31,7 +31,7 @@ def process_arguments():
     )
     if not tests:
         die(f"no tests found for {args.exercise}")
-    normalize_arguments(parser, args, tests)
+    normalize_arguments(args, tests)
     return args, tests, parameters
 
 
@@ -150,10 +150,10 @@ def parse_arguments():
             die("no exercise specified")
     if not args.exercise and args.autotest_directory:
         args.exercise = os.path.basename(args.autotest_directory)
-    return (parser, args)
+    return args
 
 
-def normalize_arguments(parser, args, tests):
+def normalize_arguments(args, tests):
     test_labels = set(list(tests.keys()))
     programs = list(set(tests[t].program for t in tests))
     files = list(set(f for t in tests for f in tests[t].files))
@@ -190,7 +190,9 @@ def normalize_arguments(parser, args, tests):
                     os.path.join(args.autotest_directory, "runtests.pl")
                 ):
                     die(
-                        f"unexpected argument '{arg}'\nSpecify 1+ of these filenames: {' '.join(files)}\nOr 1+ of these individual tests: {' '.join(test_labels)}"
+                        f"unexpected argument '{arg}'\n"
+                        + f"Specify 1+ of these filenames: {' '.join(files)}\n"
+                        + f"Or 1+ of these individual tests: {' '.join(test_labels)}"
                     )
             else:
                 args.labels += matching_labels
@@ -330,6 +332,7 @@ def find_autotest_dir(exercise_directories, exercise, sub_pathnames, debug=0):
         die(f"no autotest found for {exercise}")
     else:
         die("no autotest found")
+    sys.exit(0)
 
 
 def add_obsolete_arguments(parser):
@@ -392,7 +395,7 @@ def check_obsolete_arguments(args):
     give helpful message for obsolete arguments then die
     """
     for (argument, parameter_name) in PARAMETERS_MATCHING_OBSOLETE_ARGUMENTS:
-        if hasattr(args, argument) and getattr(args, argument) != None:
+        if getattr(args, argument, None) is not None:
             print(getattr(args, argument))
             die(
                 f"argument '{argument}' no longer supported, instead use -P to specify an equivalent value for parameter '{parameter_name}'"
@@ -407,6 +410,7 @@ def repository_name(submission_name, account=None):
     zid = get_zid(account)
     if re.search(r"^lab", submission_name):
         submission_name = "labs"
+    # pylint: disable=import-error
     import course_configuration  # type: ignore
 
     c = course_configuration["course_code"].lower()
