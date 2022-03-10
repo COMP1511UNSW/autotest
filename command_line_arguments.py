@@ -8,8 +8,10 @@ from copy_files_to_temp_directory import load_embedded_autotest
 
 # rewrite the extra help
 
-REPO="https://github.com/COMP1511UNSW/autotest"
-REPO_INFORMATION = f"Test specification documentation & source at: {REPO} - issues welcome"
+REPO = "https://github.com/COMP1511UNSW/autotest"
+REPO_INFORMATION = (
+    f"Test specification documentation & source at: {REPO} - issues welcome"
+)
 
 EXTRA_HELP = f"""
 
