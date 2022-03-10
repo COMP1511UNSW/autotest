@@ -26,6 +26,7 @@ from command_line_arguments import process_arguments
 from copy_files_to_temp_directory import copy_files_to_temp_directory
 from run_tests import run_tests, generate_expected_output
 from upload_results import run_tests_and_upload_results
+from command_line_arguments import REPO_INFORMATION
 
 
 def main():
@@ -40,6 +41,7 @@ def main():
         print(f"{my_name}: {e}", file=sys.stderr)
         if debug:
             traceback.print_exc(file=sys.stderr)
+        print(REPO_INFORMATION)
         sys.exit(2)
     except Exception:
         etype, evalue, _etraceback = sys.exc_info()
@@ -47,6 +49,7 @@ def main():
         print(f"{my_name}: internal error: {eformatted}", file=sys.stderr)
         if debug:
             traceback.print_exc(file=sys.stderr)
+        print(REPO_INFORMATION)
         sys.exit(2)
 
 

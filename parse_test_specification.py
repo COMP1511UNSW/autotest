@@ -433,7 +433,7 @@ def output_file_without_parameters(
 
     """
     if remove_parameters is None:
-        remove_parameters = ["expected_stdin", "expected_stdout"]
+        remove_parameters = ["expected_stdout", "expected_stderr"]
     with open(pathname, "r", encoding="utf-8") as f:
         return output_stream_without_parameters(
             f,
@@ -482,6 +482,10 @@ def output_lines_without_parameters(source_lines, parameters, remove_parameters,
     """
     output_stream_without_parameters helper
     """
+
+    if source_lines.startswith("### generated"):
+        return
+
     if not (set(remove_parameters) & set(parameters)):
         print(source_lines, end="", file=file)
         return
