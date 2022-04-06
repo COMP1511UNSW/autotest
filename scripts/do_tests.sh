@@ -34,5 +34,4 @@ do
 		$autotest_command 2>&1 |
 		sed "s/^/$indent /"
 	fi
-
 done

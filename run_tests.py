@@ -157,9 +157,11 @@ def run_one_test(
         if not compile_command:
             compile_command_str = ""
         elif isinstance(compile_command, list):
-            compile_command_str = " ".join(compile_command + test_files)
+            compile_command_str = " ".join(compile_command)
         else:
-            compile_command_str = compile_command + " " + " ".join(test_files)
+            compile_command_str = compile_command
+        if not parameters["compiler_args"]:
+            compile_command_str += " " + " ".join(test_files)
 
         individual_test.run_test(compile_command=compile_command_str)
         individual_tests.append(individual_test)

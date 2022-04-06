@@ -1,4 +1,4 @@
 int main(void) {
-	void b(void);
+    void b(void);
     b();
 }
