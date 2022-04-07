@@ -38,9 +38,7 @@ def explain_output_differences(
         if name == "output":
             return colored("Your program produced no output\n", "red")
         word = "on" if name == "stderr" else "in"
-        explanation = colored(
-            f"Your program produced no output {word} {name}\n", "red"
-        )
+        explanation = colored(f"Your program produced no output {word} {name}\n", "red")
         if show_expected_output:
             explanation += f"\nThe correct {name} for this test was:\n"
             explanation += colored(sanitize_string(expected, **parameters), "green")
