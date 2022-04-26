@@ -339,7 +339,7 @@ def link_program(
     if not os.path.exists(program):
         if debug > 3:
             print("link_program - before link command")
-            subprocess.call("pwd",   shell=True)
+            subprocess.call("pwd", shell=True)
             subprocess.call("ls -l", shell=True)
             print(f"os.symlink({unique_program_name}, {program})", file=sys.stderr)
 
@@ -348,7 +348,7 @@ def link_program(
 
         if debug > 3:
             print("link_program - after link command")
-            subprocess.call("pwd",   shell=True)
+            subprocess.call("pwd", shell=True)
             subprocess.call("ls -l", shell=True)
 
     linked_program[program] = unique_program_name
