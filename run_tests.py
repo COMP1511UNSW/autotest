@@ -121,7 +121,7 @@ def run_one_test(
         )
         return -1
 
-    if not run_compilers(test_files, parameters, file=file):
+    if not run_compilers(test_files, parameters, file=file, debug=debug):
         print(
             not_run_description,
             "because",
@@ -284,7 +284,10 @@ def run_compilers(
         try:
             if debug > 1:
                 print(f"os.rename({program}, {unique_program_name})", file=sys.stderr)
-            os.rename(program, unique_program_name)
+            if not os.path.islink(program):
+                # this rename, in conjunction with link_program, will *always* cause a symlink loop
+                # there probably are reasons to rename a symlink but unless link_program is changed we cannot do so
+                os.rename(program, unique_program_name)
         except OSError as e:
             if debug:
                 print(e, file=file)
@@ -303,7 +306,7 @@ def link_program(
 ) -> None:
     """
     link appropriate binary for test execution
-    linked_program is used to track current link to allows us to avoid some workxy
+    linked_program is used to track current link to allows us to avoid some work
     """
 
     if debug > 3:
@@ -315,7 +318,6 @@ def link_program(
             linked_program,
             debug,
         )
-        subprocess.call("ls -l", shell=True)
 
     unique_program_name = get_unique_program_name(program, compile_command, test_files)
 
@@ -329,18 +331,27 @@ def link_program(
 
     # for safety don't remove anything but a link
     if os.path.islink(program):
+        if debug > 2:
+            print("link_program - removing existing link")
         os.unlink(program)
 
     # what should we do if program already exists?
     if not os.path.exists(program):
         if debug > 3:
-            subprocess.call("ls -l;pwd", shell=True)
-            print(f"os.link({unique_program_name}, {program})", file=sys.stderr)
-        os.link(unique_program_name, program)
-    linked_program[program] = unique_program_name
+            print("link_program - before link command")
+            subprocess.call("pwd",   shell=True)
+            subprocess.call("ls -l", shell=True)
+            print(f"os.symlink({unique_program_name}, {program})", file=sys.stderr)
 
-    if debug > 3:
-        subprocess.call("echo after link command;ls -l", shell=True)
+        # os.path.islink() only checks for symlinks, not hard links
+        os.symlink(unique_program_name, program)
+
+        if debug > 3:
+            print("link_program - after link command")
+            subprocess.call("pwd",   shell=True)
+            subprocess.call("ls -l", shell=True)
+
+    linked_program[program] = unique_program_name
 
 
 def get_unique_program_name(
