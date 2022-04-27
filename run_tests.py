@@ -144,7 +144,11 @@ def run_one_test(
 
         if compile_command:
             link_program(
-                parameters["program"], compile_command, test_files, linked_program=linked_program, debug=debug
+                parameters["program"],
+                compile_command,
+                test_files,
+                linked_program=linked_program,
+                debug=debug,
             )
 
         if parameters["setup_command"]:
@@ -167,10 +171,8 @@ def run_one_test(
         individual_test.run_test(compile_command=compile_command_str)
 
         if linked_program:
-            unlink_program(
-                linked_program=linked_program, debug=debug
-            )
-        
+            unlink_program(linked_program=linked_program, debug=debug)
+
         individual_tests.append(individual_test)
         if not individual_test.stderr_ok and not parameters["allow_unexpected_stderr"]:
             break
@@ -326,9 +328,12 @@ def link_program(
     unique_program_name = get_unique_program_name(program, compile_command, test_files)
 
     # should already be linked
-    if linked_program.get(program, None) == unique_program_name and \
-            os.path.exists(program) and os.path.exists(unique_program_name) and \
-            os.stat(program).st_ino == os.stat(unique_program_name).st_ino:
+    if (
+        linked_program.get(program, None) == unique_program_name
+        and os.path.exists(program)
+        and os.path.exists(unique_program_name)
+        and os.stat(program).st_ino == os.stat(unique_program_name).st_ino
+    ):
         if debug > 2:
             print("link_program - using existing link")
         return
@@ -398,6 +403,7 @@ def unlink_program(
         subprocess.call("ls -il", shell=True)
 
     linked_program.clear()
+
 
 def get_unique_program_name(
     program: str, compile_command: Union[List[str], str], test_files: List[str]
