@@ -139,7 +139,7 @@ def run_one_test(
     print(description, end="", file=file)
 
     individual_tests = []
-    linked_program = {}
+    linked_program: Dict[str, str] = {}
     for compile_command in parameters["compile_commands"] or [""]:
 
         if compile_command:
