@@ -481,7 +481,8 @@ def run_support_command(
         return result_cache[cmd_str]
 
     if unlink and os.path.exists(unlink) and os.path.islink(unlink):
-        print("run_support_command unlinking: ", unlink)
+        if debug > 1:
+            print("run_support_command unlinking: ", unlink)
         os.unlink(unlink)
 
     if print_command or debug:
