@@ -26,6 +26,9 @@ autotest lab08 -l lectures_3 lectures_4        # run specified tests
 def process_arguments():
     args = parse_arguments()
 
+    if args.inside_sandbox:
+        return args, {}, {}
+
     test_specification_pathname = find_test_specification(args)
     tests_as_dicts, parameters = parse_file(
         test_specification_pathname,
@@ -93,6 +96,13 @@ def parse_arguments():
         "-P", "--parameters", help="set parameter values", action="append"
     )
 
+    parser.add_argument(
+        "-I",
+        "--inside_sandbox",
+        action="store_true",
+        help="re-invoke autotest inside a sandbox",
+    )
+
     parser.add_argument("extra_arguments", nargs="*", default=[], help="")
 
     source_args = parser.add_mutually_exclusive_group()
@@ -130,6 +140,9 @@ def parse_arguments():
     add_obsolete_arguments(parser)
 
     args = parser.parse_args()
+
+    if args.inside_sandbox:
+        return args
 
     check_obsolete_arguments(args)
 

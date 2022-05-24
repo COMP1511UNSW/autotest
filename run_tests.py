@@ -14,6 +14,24 @@ from run_test import _Test
 from argparse import Namespace
 
 
+def run_tests_creating_log(tests, parameters, args):
+    class Tee:
+        def __init__(self, stream):
+            self.stream = stream
+            self.fileno = stream.fileno
+
+        def flush(self):
+            sys.stdout.flush()
+            self.stream.flush()
+
+        def write(self, message):
+            sys.stdout.write(message)
+            self.stream.write(message)
+
+    with open("autotest.log", "w", encoding="utf-8") as f:
+        return run_tests(tests, parameters, args, file=Tee(f))
+
+
 def run_tests(
     tests: Dict[str, _Test],
     global_parameters: Dict[str, Any],

@@ -1,5 +1,3 @@
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-
 Autotest runs a series of tests on 1 or more programs comparing their behaviour to specified expected behaviour.
 
 Autotest focuses on producing output comprehensible to a novice programmer
@@ -19,12 +17,6 @@ files=is_prime.c
 3 stdin="47" expected_stdout="47 is prime\n"
 ```
 
-## Installing requirements
-
-This project uses `pipenv` to manage requirements. You will need to install pipenv with `python3 -m pip install pipenv` and then fetch dependencies using `pipenv install`. 
-
-To run the script within the environment, it should be invoked using `pipenv run python autotest.py`.
-
 ## Running Autotest
 
 Autotest allows flexible specification of command line arguments, so it can be comfortable
@@ -43,8 +35,7 @@ parameters="
 	upload_url = https://example.com/autotest.cgi
 "
 
-exec /usr/local/autotest/autotest.py --exercise_directory /home/class/activities --parameters "$parameters" "$@"
-```
+exec /usr/local/autotest/autotest.py --exercise_directory /home/class/activities --parameters "$parameters" "$@"```
 
 Students can then run the wrapper script simply specifying  the particular class exercise they wish to
 autotest, perhaps:
@@ -198,8 +189,7 @@ test6  arguments=46  expected_stdout="46 is not prime.\n"
 
 
 # make test succeed if it has just right digits in output
-test7  arguments=47 compare_only_characters="0123456789" expected_stdout="47 is not prime.\n"
-```
+test7  arguments=47 compare_only_characters="0123456789" expected_stdout="47 is not prime.\n"```
 
 
 
@@ -241,7 +231,7 @@ Input files required to be supplied for a test.
 If **`files`** is not specified it is set to the parameter **`program`**
 with a `.c`  appended iff **`program`** does not contain a '.'.  
 For example if **`files`** is not specified and **`program`** == **`hello`**, **`files`** will be set to `hello.c`,
-but if **`program`** == `hello.sh` **`files`** will be set to `hello.c` 
+but if **`program`** == `hello.sh` **`files`** will be set to `hello.c`
 
 **`optional_files`** = \[\]
 
@@ -267,7 +257,7 @@ If **`pre_compile_command`** is a list, it is executed directly.
 **`default_checkers`** = {'js': \[\['node', '--check'\]\], 'pl': \[\['perl', '-cw'\]\], 'py': \[\['python3', '-B', '-m', 'py_compile'\]\], 'sh': \[\['bash', '-n'\]\]}
 
 
-A dict which supplies a default value for the parameter **`checkers`** based on the suffix for the 
+A dict which supplies a default value for the parameter **`checkers`** based on the suffix for the
 the first file specified by  the parameter **`files`**.
 
 **`checkers`**
@@ -278,10 +268,10 @@ Checkers are only run once for a file.
 If checker is a string it is run by passing it to a shell.
 Deprocated: if the value is a string containing ':' a list is formed by splitting the string at the ':'s.
 
-**`default_compilers`** = {'c': \[\['dcc', '-Wall'\]\], 'cc': \[\['g++', '-Wall'\]\], 'java': \[\['javac'\]\], 'rs': \[\['rustc'\]\]}
+**`default_compilers`** = {'c': \[\[\['dcc'\], \['clang', '-Wall'\], \['gcc', '-Wall'\]\]\], 'cc': \[\['g++', '-Wall'\]\], 'java': \[\['javac'\]\], 'rs': \[\['rustc'\]\]}
 
 
-A dict which supplies a default value for the parameter **`compilers`** based on the suffix for the 
+A dict which supplies a default value for the parameter **`compilers`** based on the suffix for the
 the first file specified by  the parameter **`files`**.
 If '%' is present in a list, it is replaced by the **`program`**.
 
@@ -290,13 +280,25 @@ If '%' is present in a list, it is replaced by the **`program`**.
 
 List of compilers + arguments.  
 **`files`** are compiled with each member of list and test is run once for each member of the list.  
+For example, given:
+```
+# run all tests twice once compiled with gcc -fsanitize=address, once with clang -fsanitize=memory
+compilers = [['gcc', '-fsanitize=address'], ['clang', '-fsanitize=memory']]
+```
+Element of the list of compilers can themselves be a list specifying a list of alternative compilers.  
+For example:
+```
+# run all tests twice once compiled with gcc -fsanitize=address, once with clang -fsanitize=memory
+compilers = [[['dcc'], ['clang', '-Wall'], ['gcc', -Wall]]]
+```
+The first element of this sub-list where the compiler can be found in PATH is used.  
 If compiler is a string it is run by passing it to a shell.  
 Deprocated: if the value is a string containing ':' a list is formed by splitting the string at the ':'s.
 
 **`default_compiler_args`** = {'c': \[\['-o', '%'\]\], 'cc': \[\['-o', '%'\]\]}
 
 
-A dict which supplies a default value for the parameter **`compilers`** based on the suffix for the 
+A dict which supplies a default value for the parameter **`compilers`** based on the suffix for the
 the first file specified by  the parameter **`files`**.
 If '%' is present in a list, it is replaced by the **`program`**.
 
@@ -343,6 +345,30 @@ Bytes supplied on stdin for test.
 Deprocated: stdin is not specified and the file *test_label*`.stdin` exists, its contents are used.  
 Not yet implemented: if value is a list it is treated as list of pathname of file(s) containing bytes.
 
+**`unicode_stdin`** = True
+
+
+Whether or not the specified stdin should be treated as unicode.
+Default is True.
+
+**`unicode_stdout`** = True
+
+
+Whether or not the program's stdout should be treated as unicode.
+Default is True.
+
+**`unicode_stderr`** = True
+
+
+Whether or not the program's stderr should be treated as unicode.
+Default is True.
+
+**`unicode_files`** = True
+
+
+Describes whether or not output files should be treated as unicode.
+Default is True.
+
 **`environment_kept`** = 'ARCH|C_CHECK_.*|DCC_.*|DRYRUN_.*|LANG|LANGUAGE|LC_.*|LOGNAME|USER'
 
 
@@ -363,7 +389,7 @@ Default:
 'PERL5LIB' : '.',
 'HOME' : '.',
 'PATH' : '/bin:/usr/bin:/usr/local/bin:.:$PATH',
-}, 
+},
 ```
 where `$PATH` is the original value of `PATH`.
 
@@ -378,7 +404,7 @@ It is only necessary to specify **`environment_base`** if these variables need t
 
 Dict specifying environment variables to be set for this test.  
 For example: `environment_set={'answer' : 42 }`  
-This is the parameter that should normally be used to manipulate environment variables. 
+This is the parameter that should normally be used to manipulate environment variables.
 
 **`environment`**
 
@@ -471,7 +497,7 @@ Maximum CPU time in seconds (0 for no limit).
 **`max_core_size`** = 0
 
 
-Maximum size of any core file written in bytes.  
+Maximum size of any core file written in bytes.
 
 **`max_stack_bytes`** = 32000000
 
@@ -529,13 +555,13 @@ Ignore lines containing only white space when comparing actual & expected output
 Ignore these characters when comparing actual & expected output.  
 Ignoring "
 " has no effect, use **`ignore_blank_lines**` to ignore empty lines.  
-Unimplemented: handling of UNICODE. 
+Unimplemented: handling of UNICODE.
 
 **`compare_only_characters`**
 
 
 Ignore all but these characters and newline when comparing actual & expected output.  
-Unimplemented: handling of UNICODE. 
+Unimplemented: handling of UNICODE.
 
 **`postprocess_output_command`**
 
@@ -621,7 +647,7 @@ Likely to be replaced with improved controls.
 
 
 Use dcc's builtin output checking to check for tests's expected output.
-This is done by setting several environment variables for the test 
+This is done by setting several environment variables for the test
 
 ### Miscellaneous parameters
 
@@ -650,6 +676,54 @@ Any specified fields/values are added to upload requests.
 
 
 Level of internal debugging output to print.
+
+**`sandbox`**
+
+
+Run tests within a sandbox - currently requires /usr/bin/unshare.
+Deliberate escape from sandbox may be possible.
+Only one sandbox is used for all tests.  This parameter must be set as a global parameter.
+
+**`sandbox_network`** = True
+
+
+If running in a **`sandbox`**, sandbox network.
+
+**`sandbox_read_only_mount`** = \[\]
+
+
+Pathnames of files or directories mounted read-only in the sandbox
+in addition to files or directories specified by **`sandbox_read_only_mount_base`**.
+A tuple can be to specify a diferent mount point in the sandbox.
+
+**`sandbox_read_write_mount`** = \[\]
+
+
+Pathnames of files or directories visible mounted read-write in the sandbox
+in addition to files or directories specified by **`sandbox_read_write_mount_base`**.
+A tuple can be to specify a different mount point in the sandbox
+`/proc` and `/tmp` are always mounted read-write in the sandbox
+
+**`sandbox_read_only_mount_base`** = \['/bin', '/etc', '/lib', '/lib32', '/lib64', '/libx32', '/sbin', '/usr'\]
+
+
+Pathnames of files or directories mounted read-only in the sandbox
+The parameter **`sandbox_read_only_mount`** should be used to add extra pathnames.<bt>
+This parameter need only be set to stop one of these pathnames being mounted.
+
+**`sandbox_read_write_mount_base`** = \['/dev/null', '/dev/zero', '/dev/random', '/dev/urandom'\]
+
+
+Pathnames of files or directories visible mounted read-write in the sandbox<dt>
+/tmp, /pro, /dev/shm  are separately provided read-write in the sandbox<dt>
+The parameter **`"sandbox_read_write_mount`** should be used to add extra pathnames.<bt>
+This parameter need only be set to stop one of these pathnames being mounted.
+
+**`sandbox_command`**
+
+
+Command used to create sandbox
+It is given two arguments: the full pathname of the autotest.py and '--inside_sandbox'
 
 <!--- end - autogenerated from parameter_descriptions.py --->
 

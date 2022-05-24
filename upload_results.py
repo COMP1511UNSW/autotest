@@ -1,31 +1,14 @@
 # upload results of an autotest via http
 
 import io, os, platform, sys, zipfile
-from run_tests import run_tests
 
 
-def run_tests_and_upload_results(tests, parameters, args):
-    class Tee:
-        def __init__(self, stream):
-            self.stream = stream
-            self.fileno = stream.fileno
-
-        def flush(self):
-            sys.stdout.flush()
-            self.stream.flush()
-
-        def write(self, message):
-            sys.stdout.write(message)
-            self.stream.write(message)
-
+def upload_results_http(tests, parameters, args):
     upload_url = parameters["upload_url"]
     upload_fields = parameters["upload_fields"]
     upload_fields["exercise"] = args.exercise
     upload_fields["hostname"] = platform.node()
     upload_fields["login"] = getlogin()
-
-    with open("autotest.log", "w", encoding="utf-8") as f:
-        exit_status = run_tests(tests, parameters, args, file=Tee(f))
 
     buffer = io.BytesIO()
     zip_files_for_upload(buffer, tests, parameters, args)
@@ -40,10 +23,8 @@ def run_tests_and_upload_results(tests, parameters, args):
     except Exception as e:
         if args.debug:
             print(e, file=sys.stderr)
-        return exit_status
     if args.debug:
         print(r.text, file=sys.stderr)
-    return exit_status
 
 
 def zip_files_for_upload(stream, tests, parameters, args):

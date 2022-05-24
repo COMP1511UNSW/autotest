@@ -24,9 +24,10 @@ if __name__ == "__main__":
 from util import AutotestException, TestSpecificationError
 from command_line_arguments import process_arguments
 from copy_files_to_temp_directory import copy_files_to_temp_directory
-from run_tests import run_tests, generate_expected_output
-from upload_results import run_tests_and_upload_results
+from run_tests import run_tests, run_tests_creating_log, generate_expected_output
+from upload_results import upload_results_http
 from command_line_arguments import REPO_INFORMATION
+from sandbox import run_tests_in_sandbox, continue_inside_sandbox
 
 
 def main():
@@ -77,15 +78,40 @@ def run_autotest():
         )
         return 0
 
-    copy_files_to_temp_directory(args, parameters)
+    inside_sandbox = args.inside_sandbox
+    starting_sandbox = not inside_sandbox and parameters.get("sandbox", "")
 
-    if args.generate_expected_output != "no":
-        return generate_expected_output(tests, args)
+    if starting_sandbox:
+        # get absolute path for argv[0]
+        # before lost because of cd in copy_files_to_temp_directory
+        argv0_realpath = os.path.realpath(sys.argv[0])
 
-    if parameters.get("upload_url", ""):
-        return run_tests_and_upload_results(tests, parameters, args)
+    if inside_sandbox:
+        # we have been re-invoked inside the  sandbox
+        # files were copied to the temporary directory before re-invocation
+        # need to recover variables from original invocation
+        (tests, args, parameters) = continue_inside_sandbox()
     else:
-        return run_tests(tests, parameters, args)
+        copy_files_to_temp_directory(args, parameters)
+
+    uploading_results = parameters.get("upload_url", "")
+
+    if starting_sandbox:
+        exit_status = run_tests_in_sandbox(argv0_realpath, tests, args, parameters)
+    else:
+        if args.generate_expected_output != "no":
+            return generate_expected_output(tests, args)
+
+        if uploading_results:
+            exit_status = run_tests_creating_log(tests, parameters, args)
+        else:
+            exit_status = run_tests(tests, parameters, args)
+
+    if uploading_results and not inside_sandbox:
+        # upload of tests in sandbox may fail because network is sandbox
+        upload_results_http(tests, parameters, args)
+
+    return exit_status
 
 
 if __name__ == "__main__":

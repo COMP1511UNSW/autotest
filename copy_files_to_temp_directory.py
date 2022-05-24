@@ -4,19 +4,22 @@ import atexit, glob, io, os, pkgutil, re, shutil, subprocess, sys, tarfile, temp
 from shutil import copy2, copystat
 from util import die
 
-# Returns False if expected files are missing, True otherwise.
+INITIAL_DIR_NAME = "autotest"
+
+
 def copy_files_to_temp_directory(args, parameters):
     temp_dir = tempfile.mkdtemp()
     atexit.register(cleanup, temp_dir=temp_dir, args=args)
+
+    initial_dir = os.path.join(temp_dir, INITIAL_DIR_NAME)
+    os.mkdir(initial_dir, 0o700)
+
     if parameters["supplied_files_directory"]:
-        copy_directory(parameters["supplied_files_directory"], temp_dir)
+        copy_directory(parameters["supplied_files_directory"], initial_dir)
 
-    fetch_submission(temp_dir, args)
+    fetch_submission(initial_dir, args)
 
-    os.chdir(temp_dir)
-
-    # added for COMP1521 shell assignment but probably a good idea generally
-    # os.environ['HOME'] = temp_dir
+    os.chdir(initial_dir)
 
     for expected_file in glob.glob("*.expected_*"):
         os.chmod(expected_file, 0o400)

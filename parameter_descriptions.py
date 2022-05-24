@@ -157,7 +157,7 @@ PARAMETER_LIST += [
             **`command`** is set to a list containing **`program`** with **`arguments`** appended.<br>
             Otherwise **`command`** is inferred heuristically from the first filename
             specified in  by parameter **`files`**, if possible.
-            
+
         """,
     ),
     Parameter(
@@ -203,7 +203,7 @@ PARAMETER_LIST += [
             If **`files`** is not specified it is set to the parameter **`program`**
             with a `.c`  appended iff **`program`** does not contain a '.'.<br>
             For example if **`files`** is not specified and **`program`** == **`hello`**, **`files`** will be set to `hello.c`,
-            but if **`program`** == `hello.sh` **`files`** will be set to `hello.c` 
+            but if **`program`** == `hello.sh` **`files`** will be set to `hello.c`
         """,
     ),
     Parameter(
@@ -335,7 +335,7 @@ PARAMETER_LIST += [
             "sh": [["bash", "-n"]],
         },
         description="""
-            A dict which supplies a default value for the parameter **`checkers`** based on the suffix for the 
+            A dict which supplies a default value for the parameter **`checkers`** based on the suffix for the
             the first file specified by  the parameter **`files`**.
         """,
     ),
@@ -358,7 +358,7 @@ PARAMETER_LIST += [
             "rs": [["rustc"]],
         },
         description="""
-            A dict which supplies a default value for the parameter **`compilers`** based on the suffix for the 
+            A dict which supplies a default value for the parameter **`compilers`** based on the suffix for the
             the first file specified by  the parameter **`files`**.
             If '%' is present in a list, it is replaced by the **`program`**.
         """,
@@ -372,7 +372,7 @@ PARAMETER_LIST += [
             For example, given:
             ```
             # run all tests twice once compiled with gcc -fsanitize=address, once with clang -fsanitize=memory
-            compilers = [['gcc', '-fsanitize=address'], ['clang', '-fsanitize=memory']] 
+            compilers = [['gcc', '-fsanitize=address'], ['clang', '-fsanitize=memory']]
             ```
             Element of the list of compilers can themselves be a list specifying a list of alternative compilers.<br>
             For example:
@@ -392,7 +392,7 @@ PARAMETER_LIST += [
             "cc": [["-o", "%"]],
         },
         description="""
-            A dict which supplies a default value for the parameter **`compilers`** based on the suffix for the 
+            A dict which supplies a default value for the parameter **`compilers`** based on the suffix for the
             the first file specified by  the parameter **`files`**.
             If '%' is present in a list, it is replaced by the **`program`**.
         """,
@@ -675,10 +675,10 @@ PARAMETER_LIST += [
                 'PERL5LIB' : '.',
                 'HOME' : '.',
                 'PATH' : '/bin:/usr/bin:/usr/local/bin:.:$PATH',
-                }, 
+                },
             ```
             where `$PATH` is the original value of `PATH`.
-             
+
             The environment  variables in **`environment_base`** are set and then,
             environment  variables specified in **`environment_set`** are set.<bt>
             This parameter should not normally be used.<bt>
@@ -693,7 +693,7 @@ PARAMETER_LIST += [
         description="""
             Dict specifying environment variables to be set for this test.<br>
             For example: `environment_set={'answer' : 42 }`<br>
-            This is the parameter that should normally be used to manipulate environment variables. 
+            This is the parameter that should normally be used to manipulate environment variables.
         """,
     ),
     Parameter(
@@ -714,7 +714,7 @@ PARAMETER_LIST += [
             removing all but those matching the regex in **`environment_variables_kept`**,<br>
             setting any variables specified in **`environment_base`** and then<br>
             setting any variables specified in **`environment_set`**.
-            
+
         """,
     ),
     "### Parameters specifying expected output for test",
@@ -815,16 +815,16 @@ PARAMETER_LIST += [
             If a value is a list it is treated as list of pathname of file(s) containing expected bytes.<br>
             For example: this indicates `a file named `answer.txt` should be created containing `42`.
             `expected_files={"answer.txt":"42\n"}`<br>
-            
+
             Not yet implemented: handling of non-unicode output.<br>
 
         """,
     ),
     """
         ### Parameters specifying resource limits for test
-        
+
         Resource limits are mostly implemented on via `setrlimit` and more information can be found in its documentation.
-    
+
         If a resource limit is exceeded, the test is failed with an explanatory message.
     """,
 ]
@@ -846,7 +846,7 @@ PARAMETER_LIST += [
         finalize=finalize_max_bytes,
         description="""
             Maximum number of bytes that can be written to *stdout*.
-            
+
         """,
     ),
     Parameter(
@@ -876,7 +876,7 @@ PARAMETER_LIST += [
         "max_core_size",
         default=0,
         description="""
-            Maximum size of any core file written in bytes.  
+            Maximum size of any core file written in bytes.
         """,
     ),
     Parameter(
@@ -955,14 +955,14 @@ PARAMETER_LIST += [
         description="""
             Ignore these characters when comparing actual & expected output.<br>
             Ignoring "\n" has no effect, use **`ignore_blank_lines**` to ignore empty lines.<br>
-            Unimplemented: handling of UNICODE. 
+            Unimplemented: handling of UNICODE.
         """,
     ),
     Parameter(
         "compare_only_characters",
         description="""
             Ignore all but these characters and newline when comparing actual & expected output.<br>
-            Unimplemented: handling of UNICODE. 
+            Unimplemented: handling of UNICODE.
         """,
     ),
     Parameter(
@@ -1132,7 +1132,7 @@ PARAMETER_LIST += [
         finalize=finalize_dcc_output_checking,
         description="""
             Use dcc's builtin output checking to check for tests's expected output.
-            This is done by setting several environment variables for the test 
+            This is done by setting several environment variables for the test
         """,
     ),
     "### Miscellaneous parameters",
@@ -1169,6 +1169,87 @@ PARAMETER_LIST += [
         default=0,
         description="""
             Level of internal debugging output to print.
+        """,
+    ),
+]
+
+UNSHARE_COMMAND = [
+    "/usr/bin/unshare",
+    "--cgroup",
+    "--fork",
+    "--ipc",
+    "--map-root-user",
+    "--mount",
+    "--net",
+    "--pid",
+    "--user",
+    "--time",
+    "--uts",
+]
+
+
+PARAMETER_LIST += [
+    Parameter(
+        "sandbox",
+        default=None,
+        description="""
+           Run tests within a sandbox - currently requires /usr/bin/unshare.
+           Deliberate escape from sandbox may be possible.
+           Only one sandbox is used for all tests.  This parameter must be set as a global parameter.
+        """,
+    ),
+    Parameter(
+        "sandbox_network",
+        default=True,
+        description="""
+           If running in a **`sandbox`**, sandbox network.
+        """,
+    ),
+    Parameter(
+        "sandbox_read_only_mount",
+        default=[],
+        description="""
+            Pathnames of files or directories mounted read-only in the sandbox
+            in addition to files or directories specified by **`sandbox_read_only_mount_base`**.
+            A tuple can be to specify a diferent mount point in the sandbox.
+        """,
+    ),
+    Parameter(
+        "sandbox_read_write_mount",
+        default=[],
+        description="""
+            Pathnames of files or directories visible mounted read-write in the sandbox
+            in addition to files or directories specified by **`sandbox_read_write_mount_base`**.
+            A tuple can be to specify a different mount point in the sandbox
+            `/tmp`, `/proc`, `/sys` and `/dev` are always mounted directly read-write in the sandbox
+        """,
+    ),
+    Parameter(
+        "sandbox_read_only_mount_base",
+        default=[
+            "/bin",
+            "/etc",
+            "/lib",
+            "/lib32",
+            "/lib64",
+            "/libx32",
+            "/sbin",
+            "/usr",
+        ],
+        description="""
+            Pathnames of files or directories mounted read-only in the sandbox
+            The parameter **`sandbox_read_only_mount`** should be used to add extra pathnames.<bt>
+            This parameter need only be set to stop one of these pathnames being mounted.
+        """,
+    ),
+    Parameter(
+        "sandbox_command",
+        default=lambda parameters: [
+            u for u in UNSHARE_COMMAND if u != "--net" or parameters["sandbox_network"]
+        ],
+        description="""
+           Command used to create sandbox
+           It is given two arguments: the full pathname of the autotest.py and '--inside_sandbox'
         """,
     ),
 ]
