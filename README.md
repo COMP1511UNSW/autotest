@@ -189,7 +189,8 @@ test6  arguments=46  expected_stdout="46 is not prime.\n"
 
 
 # make test succeed if it has just right digits in output
-test7  arguments=47 compare_only_characters="0123456789" expected_stdout="47 is not prime.\n"```
+test7  arguments=47 compare_only_characters="0123456789" expected_stdout="47 is not prime.\n"
+```
 
 
 
@@ -702,21 +703,13 @@ A tuple can be to specify a diferent mount point in the sandbox.
 Pathnames of files or directories visible mounted read-write in the sandbox
 in addition to files or directories specified by **`sandbox_read_write_mount_base`**.
 A tuple can be to specify a different mount point in the sandbox
-`/proc` and `/tmp` are always mounted read-write in the sandbox
+`/tmp`, `/proc`, `/sys` and `/dev` are always mounted directly read-write in the sandbox
 
 **`sandbox_read_only_mount_base`** = \['/bin', '/etc', '/lib', '/lib32', '/lib64', '/libx32', '/sbin', '/usr'\]
 
 
 Pathnames of files or directories mounted read-only in the sandbox
 The parameter **`sandbox_read_only_mount`** should be used to add extra pathnames.<bt>
-This parameter need only be set to stop one of these pathnames being mounted.
-
-**`sandbox_read_write_mount_base`** = \['/dev/null', '/dev/zero', '/dev/random', '/dev/urandom'\]
-
-
-Pathnames of files or directories visible mounted read-write in the sandbox<dt>
-/tmp, /pro, /dev/shm  are separately provided read-write in the sandbox<dt>
-The parameter **`"sandbox_read_write_mount`** should be used to add extra pathnames.<bt>
 This parameter need only be set to stop one of these pathnames being mounted.
 
 **`sandbox_command`**
