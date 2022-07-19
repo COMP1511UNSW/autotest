@@ -1077,6 +1077,14 @@ PARAMETER_LIST += [
         """,
     ),
     Parameter(
+        "show_all_lines",
+        default=False,
+        description="""
+            If true lines are never elided.
+            Likely to be replaced with improved controls.
+        """,
+    ),
+    Parameter(
         "max_line_length_shown",
         default=1024,
         description="""

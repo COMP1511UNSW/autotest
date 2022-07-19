@@ -24,6 +24,7 @@ def explain_output_differences(
     show_actual_output=True,
     show_diff=True,
     max_lines_shown=32,
+    show_all_lines=False,
     max_line_length_shown=1024,
     debug=False,
     **parameters,
@@ -41,7 +42,13 @@ def explain_output_differences(
         explanation = colored(f"Your program produced no output {word} {name}\n", "red")
         if show_expected_output:
             explanation += f"\nThe correct {name} for this test was:\n"
-            explanation += colored(sanitize_string(expected, **parameters), "green")
+            explanation += colored(sanitize_string(
+                expected,
+                max_lines_shown=max_lines_shown,
+                show_all_lines=show_all_lines,
+                max_line_length_shown=max_line_length_shown,
+                **parameters
+            ), "green")
         return explanation
 
     if debug:
@@ -101,6 +108,9 @@ def explain_output_differences(
             explanation += actual_description
             explanation += sanitize_string(
                 actual,
+                max_lines_shown=max_lines_shown,
+                show_all_lines=show_all_lines,
+                max_line_length_shown=max_line_length_shown,
                 line_color=defaultdict(
                     lambda: "red" if parameters["colorize_output"] else ""
                 ),
@@ -126,6 +136,7 @@ def explain_output_differences(
         name,
         colored,
         max_lines_shown,
+        show_all_lines,
         debug,
         actual_line_color,
     )
@@ -136,13 +147,24 @@ def explain_output_differences(
         if actual_lines:
             explanation += actual_description
             explanation += sanitize_string(
-                actual, line_color=actual_line_color, **parameters
+                actual,
+                max_lines_shown=max_lines_shown,
+                show_all_lines=show_all_lines,
+                max_line_length_shown=max_line_length_shown,
+                line_color=actual_line_color,
+                **parameters,
             )
         if expected and actual and actual[-1] != "\n" and expected[-1] == "\n":
             explanation += "Last line of output above was not terminated with a newline('\\n') character\n"
         if show_expected_output and canonical_expected_lines:
             explanation += f"\nThe correct {n_canonical_expected_lines} lines of {name} for this test were:\n"
-            explanation += colored(sanitize_string(expected, **parameters), "green")
+            explanation += colored(sanitize_string(
+                expected,
+                max_lines_shown=max_lines_shown,
+                show_all_lines=show_all_lines,
+                max_line_length_shown=max_line_length_shown,
+                **parameters,
+            ), "green")
 
     if not actual_lines or not show_diff:
         return explanation
@@ -187,7 +209,10 @@ def explain_output_differences(
                 explanation += "\n"
                 return explanation
     if diff_explanation:
-        explanation += "\n" + "\n".join(diff_explanation[0:max_lines_shown]) + "\n"
+        if show_all_lines:
+            explanation += "\n" + "\n".join(diff_explanation) + "\n"
+        else:
+            explanation += "\n" + "\n".join(diff_explanation[0:max_lines_shown]) + "\n"
     return explanation
 
 
@@ -199,6 +224,7 @@ def create_diff(
     name,
     colored,
     max_lines_shown,
+    show_all_lines,
     debug,
     actual_line_color,
 ):
@@ -209,6 +235,7 @@ def create_diff(
         canonical_actual_lines
         and canonical_expected_lines
         and canonical_actual_lines[0] == canonical_expected_lines[0]
+        and not show_all_lines
     ):
         while (
             len(canonical_actual_lines) > 1
@@ -234,6 +261,7 @@ def create_diff(
         canonical_actual_lines
         and canonical_expected_lines
         and canonical_actual_lines[-1] == canonical_expected_lines[-1]
+        and not show_all_lines
     ):
         while (
             len(canonical_actual_lines) > 1
@@ -257,8 +285,11 @@ def create_diff(
     maximum_len_for_diff = 128
     diff_truncated = False
     if (
-        len(canonical_expected_lines) > maximum_len_for_diff
-        or len(canonical_actual_lines) > maximum_len_for_diff
+        not show_all_lines
+        and (
+            len(canonical_expected_lines) > maximum_len_for_diff
+            or len(canonical_actual_lines) > maximum_len_for_diff
+        )
     ):
         actual_lines = actual_lines[0:maximum_len_for_diff]
         expected_lines = expected_lines[0:maximum_len_for_diff]
@@ -323,8 +354,11 @@ def create_diff(
                 if last_line_in_diff:
                     diff_explanation.append(context_line)
                 elif not dotdotdot_added:
-                    diff_explanation.append("...")
-                    dotdotdot_added = True
+                    if not show_all_lines:
+                        diff_explanation.append("...")
+                        dotdotdot_added = True
+                    else:
+                        diff_explanation.append(context_line)
                 actual_line_number += 1
                 expected_line_number += 1
             if d in "-+":
@@ -332,7 +366,7 @@ def create_diff(
                 last_line_in_diff = True
             else:
                 last_line_in_diff = False
-            if len(diff_explanation) > 2 * max_lines_shown:
+            if len(diff_explanation) > 2 * max_lines_shown and not show_all_lines:
                 break
         if (diff_truncated or suffix_removed) and diff_explanation[-1] != "...":
             diff_explanation.append("...")
@@ -348,6 +382,7 @@ def sanitize_string(
     leave_tabs=False,
     leave_colorization=False,
     max_lines_shown=32,
+    show_all_lines=False,
     max_line_length_shown=1024,
     # pylint: disable=dangerous-default-value
     line_color=defaultdict(lambda: ""),
@@ -357,7 +392,7 @@ def sanitize_string(
     max_line_length_shown = int(max_line_length_shown)
     lines = unsanitized_string.splitlines()
     append_repeat_message = False
-    if len(lines) >= max_lines_shown:
+    if len(lines) >= max_lines_shown and not show_all_lines:
         last_line_index = len(lines) - 1
         last_line = lines[last_line_index]
         repeats = 1
@@ -371,7 +406,7 @@ def sanitize_string(
 
     sanitized_lines = []
     for (line_number, line) in enumerate(lines):
-        if line_number >= max_lines_shown:
+        if line_number >= max_lines_shown and not show_all_lines:
             sanitized_lines.append("...\n")
             break
         if len(line) > max_line_length_shown:
