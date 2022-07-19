@@ -42,13 +42,16 @@ def explain_output_differences(
         explanation = colored(f"Your program produced no output {word} {name}\n", "red")
         if show_expected_output:
             explanation += f"\nThe correct {name} for this test was:\n"
-            explanation += colored(sanitize_string(
-                expected,
-                max_lines_shown=max_lines_shown,
-                show_all_lines=show_all_lines,
-                max_line_length_shown=max_line_length_shown,
-                **parameters
-            ), "green")
+            explanation += colored(
+                sanitize_string(
+                    expected,
+                    max_lines_shown=max_lines_shown,
+                    show_all_lines=show_all_lines,
+                    max_line_length_shown=max_line_length_shown,
+                    **parameters,
+                ),
+                "green",
+            )
         return explanation
 
     if debug:
@@ -158,13 +161,16 @@ def explain_output_differences(
             explanation += "Last line of output above was not terminated with a newline('\\n') character\n"
         if show_expected_output and canonical_expected_lines:
             explanation += f"\nThe correct {n_canonical_expected_lines} lines of {name} for this test were:\n"
-            explanation += colored(sanitize_string(
-                expected,
-                max_lines_shown=max_lines_shown,
-                show_all_lines=show_all_lines,
-                max_line_length_shown=max_line_length_shown,
-                **parameters,
-            ), "green")
+            explanation += colored(
+                sanitize_string(
+                    expected,
+                    max_lines_shown=max_lines_shown,
+                    show_all_lines=show_all_lines,
+                    max_line_length_shown=max_line_length_shown,
+                    **parameters,
+                ),
+                "green",
+            )
 
     if not actual_lines or not show_diff:
         return explanation
@@ -284,12 +290,9 @@ def create_diff(
 
     maximum_len_for_diff = 128
     diff_truncated = False
-    if (
-        not show_all_lines
-        and (
-            len(canonical_expected_lines) > maximum_len_for_diff
-            or len(canonical_actual_lines) > maximum_len_for_diff
-        )
+    if not show_all_lines and (
+        len(canonical_expected_lines) > maximum_len_for_diff
+        or len(canonical_actual_lines) > maximum_len_for_diff
     ):
         actual_lines = actual_lines[0:maximum_len_for_diff]
         expected_lines = expected_lines[0:maximum_len_for_diff]

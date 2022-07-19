@@ -89,7 +89,15 @@ def run_coroutine(
 
     # Create the subprocess
     # FIXME: There should be a parameter to control what shell to use
-    command = ["/bin/sh" if shutil.which("bash") is None else shutil.which("bash"), "-c", command] if isinstance(command, str) else command
+    command = (
+        [
+            "/bin/sh" if shutil.which("bash") is None else shutil.which("bash"),
+            "-c",
+            command,
+        ]
+        if isinstance(command, str)
+        else command
+    )
 
     # subtle issue with providing string as input so just write it to a temporary file
     if stdin:
