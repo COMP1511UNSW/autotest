@@ -9,6 +9,7 @@
 #
 
 import asyncio, locale, re, os, resource, signal, subprocess, sys, tempfile, threading
+import shutil
 
 
 def run(command, **parameters):
@@ -87,7 +88,8 @@ def run_coroutine(
             os.nice(nice)
 
     # Create the subprocess
-    command = ["/bin/sh", "-c", command] if isinstance(command, str) else command
+    # FIXME: There should be a parameter to control what shell to use
+    command = ["/bin/sh" if shutil.which("bash") is None else shutil.which("bash"), "-c", command] if isinstance(command, str) else command
 
     # subtle issue with providing string as input so just write it to a temporary file
     if stdin:
