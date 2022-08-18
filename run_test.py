@@ -250,7 +250,14 @@ class _Test:
             n_input_lines = std_input.count("\n")
 
         if self.parameters["show_stdin"]:
-            if unicode_stdin and std_input and (n_input_lines < self.parameters["max_lines_shown"] or self.parameters["show_all_lines"]):
+            if (
+                unicode_stdin
+                and std_input
+                and (
+                    n_input_lines < self.parameters["max_lines_shown"]
+                    or self.parameters["show_all_lines"]
+                )
+            ):
                 self.stdin_explanation += (
                     f"\nThe input for this test was:\n{colored(std_input, 'yellow')}\n"
                 )

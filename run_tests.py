@@ -225,7 +225,10 @@ def run_one_test(
         )
         if parameters["show_squashed_input"] and stdin_explanation:
             print(stdin_explanation, flush=True, file=file, end="")
-        if parameters["show_squashed_reproduce_command"] and reproduce_command_explanation:
+        if (
+            parameters["show_squashed_reproduce_command"]
+            and reproduce_command_explanation
+        ):
             print(reproduce_command_explanation, flush=True, file=file, end="")
     else:
         print(
@@ -562,9 +565,7 @@ def generate_expected_output(
     format = re.sub(r"\W", "", format)
 
     if format not in ["inline", "inlined", "multiline"]:
-        raise ValueError(
-            f"invalid format {format} for --generate-expected-output"
-        )
+        raise ValueError(f"invalid format {format} for --generate-expected-output")
 
     # print test specification with generated expected output to stdout
     if method in ["stdout", "dump", "print", "echo", "show", "display"]:
@@ -612,7 +613,9 @@ def print_tests_and_expected_output(
     print_expected_output(tests, args, file, format)
 
 
-def print_expected_output(tests: Dict[str, _Test], args: Namespace, file, format: str) -> None:
+def print_expected_output(
+    tests: Dict[str, _Test], args: Namespace, file, format: str
+) -> None:
     # ignore output from tests
     with open(os.devnull, "w", encoding="utf-8") as dev_null:
         for (label, test) in tests.items():
@@ -631,12 +634,20 @@ def print_expected_output(tests: Dict[str, _Test], args: Namespace, file, format
                     print(f"{label} expected_stderr={repr(test.stderr)}", file=file)
             else:
                 if test.stdout:
-                    trailing_newline = test.stdout[-1] == '\n'
-                    stdout = '\n'.join(list(map(lambda line: repr(line)[1:-1], test.stdout.splitlines()))) + ('\n' if trailing_newline else '')
+                    trailing_newline = test.stdout[-1] == "\n"
+                    stdout = "\n".join(
+                        list(
+                            map(lambda line: repr(line)[1:-1], test.stdout.splitlines())
+                        )
+                    ) + ("\n" if trailing_newline else "")
                     print(f'{label} expected_stdout="""\\\n{stdout}"""', file=file)
                     print(file=file)
                 if test.stderr:
-                    trailing_newline = test.stderr[-1] == '\n'
-                    stderr = '\n'.join(list(map(lambda line: repr(line)[1:-1], test.stderr.splitlines()))) + ('\n' if trailing_newline else '')
+                    trailing_newline = test.stderr[-1] == "\n"
+                    stderr = "\n".join(
+                        list(
+                            map(lambda line: repr(line)[1:-1], test.stderr.splitlines())
+                        )
+                    ) + ("\n" if trailing_newline else "")
                     print(f'{label} expected_stderr="""\\\n{stderr}"""', file=file)
                     print(file=file)
