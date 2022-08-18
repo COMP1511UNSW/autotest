@@ -2,7 +2,6 @@
 # This code needs extensive revision.
 
 import copy, glob, io, os, re, subprocess, sys
-from statistics import median
 from termcolor import colored as termcolor_colored
 from parse_test_specification import output_file_without_parameters
 from util import die
