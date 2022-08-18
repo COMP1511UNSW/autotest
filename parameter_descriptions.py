@@ -998,16 +998,9 @@ PARAMETER_LIST += [
 def default_description(parameters):
     command = parameters["command"]
     if isinstance(command, list):
-        return " ".join(drepr(p) for p in command)
+        return " ".join(p for p in command)
     else:
-        return drepr(command)
-
-
-def drepr(s):
-    if isinstance(s, str) and s.isascii() and s.isprintable() and " " not in s:
-        return s
-    else:
-        return repr(s)
+        return command
 
 
 PARAMETER_LIST += [
@@ -1036,7 +1029,7 @@ PARAMETER_LIST += [
         "show_diff",
         default=True,
         description="""
-            If true, a description of the difference between expected output  is included in a test failure explanation.
+            If true, a description of the difference between expected output is included in a test failure explanation.
         """,
     ),
     Parameter(
@@ -1050,7 +1043,7 @@ PARAMETER_LIST += [
         "show_reproduce_command",
         default=True,
         description="""
-            If  true the command to reproduce the test is included  in a test failure explanation
+            If true the command to reproduce the test is included in a test failure explanation
         """,
     ),
     Parameter(
@@ -1064,7 +1057,7 @@ PARAMETER_LIST += [
         "show_stdin",
         default=True,
         description="""
-            If  true the stdin is included  in a test failure explanation
+            If true the stdin is included in a test failure explanation
         """,
     ),
     Parameter(
@@ -1098,6 +1091,36 @@ PARAMETER_LIST += [
         description="""
             If true semicolons are not replaced with newlines in the command to reproduce the test if it is included  in a test failure explanation.<br>
             Likely to be replaced with improved controls.
+        """,
+    ),
+    Parameter(
+        "squash_repeated",
+        default=True,
+        description="""
+            If multiple tests produce the same output, only show the first one.
+            Each subsequent test is prints a message saying what it is a duplicate of.
+            Eg.
+            Test 10 (./prog) - failed (errors - same as Test 3)
+        """,
+    ),
+    Parameter(
+        "show_squashed_input",
+        default=False,
+        description="""
+            If true the input for a test is shown even if the test would otherwise be squashed.
+            Note that show_stdin must also be true for the input to be shown.
+            Eg.
+            Test 10 (./prog) - failed (incorrect output - same as Test 3)
+            The input for this test was:
+            ...
+        """,
+    ),
+    Parameter(
+        "show_squashed_reproduce_command",
+        default=False,
+        description="""
+            If true the reproduce command for a test is shown even if the test would otherwise be squashed.
+            Note that show_reproduce_command must also be true for the reproduce command to be shown.
         """,
     ),
 ]
@@ -1277,9 +1300,15 @@ PARAMETER_ALIASES = {
     "use_dcc_output_checking": "dcc_output_checking",
     "cpu": "max_cpu_seconds",
     "max_cpu": "max_cpu_seconds",
+    "wall": "max_real_seconds",
+    "max_wall": "max_real_seconds",
     "max_wall_clock": "max_real_seconds",
+    "real": "max_real_seconds",
+    "max_real": "max_real_seconds",
     "timeout": "max_real_seconds",
     "colorise_output": "colorize_output",
+    "colourise_output": "colorize_output",
+    "colourize_output": "colorize_output",
 }
 
 

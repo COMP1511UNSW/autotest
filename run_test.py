@@ -80,6 +80,8 @@ class _Test:
 
         self.short_explanation = None
         self.long_explanation = None
+        self.stdin_explanation = None
+        self.reproduce_command_explanation = None
 
         stdout_short_explanation = self.check_stream(
             self.stdout, self.expected_stdout, "output"
@@ -106,12 +108,16 @@ class _Test:
             self.short_explanation = self.check_files()
 
         self.test_passed = not self.short_explanation
-        if not self.test_passed:
+        # `compile_command[0] == " "` is a hack that detects non-compiled files (like python or shell scripts)
+        # this works because of how run_tests::run_one_test() sets compile_command
+        if not self.test_passed and not compile_command[0] == " ":
             self.failed_compiler = (
                 " ".join(compile_command)
                 if isinstance(compile_command, list)
                 else str(compile_command)
             )
+        else:
+            self.failed_compiler = None
         return self.test_passed
 
     def check_files(self):
@@ -226,6 +232,89 @@ class _Test:
         path = os.path.realpath(self.autotest_dir + "/" + self.stdin_file)
         path = re.sub(r"/tmp_amd/\w+/export/\w+/\d/(\w+)", r"/home/\1", path)
         return path
+
+    def get_stdin_explanation(self):
+        if self.stdin_explanation:
+            return self.stdin_explanation
+        colored = (
+            termcolor_colored
+            if self.parameters["colorize_output"]
+            else lambda x, *a, **kw: x
+        )
+        self.stdin_explanation = ""
+        std_input = self.stdin
+        unicode_stdin = self.parameters["unicode_stdin"]
+
+        # we don't want to consider newlines when dealing with non-unicode output
+        if self.parameters["unicode_stdin"]:
+            n_input_lines = std_input.count("\n")
+
+        if self.parameters["show_stdin"]:
+            if unicode_stdin and std_input and (n_input_lines < self.parameters["max_lines_shown"] or self.parameters["show_all_lines"]):
+                self.stdin_explanation += (
+                    f"\nThe input for this test was:\n{colored(std_input, 'yellow')}\n"
+                )
+                if std_input[-1] != "\n" and "\n" in std_input[:-2]:
+                    self.stdin_explanation += (
+                        "Note: last character in above input is not '\\n'\n\n"
+                    )
+            elif (not unicode_stdin) and std_input:
+                self.stdin_explanation += f"\nThe input for this test was:\n{colored('0x' + std_input.hex(), 'yellow')}\n"
+
+        return self.stdin_explanation
+
+    def get_reproduce_command_explanation(self):
+        if self.reproduce_command_explanation:
+            return self.reproduce_command_explanation
+        colored = (
+            termcolor_colored
+            if self.parameters["colorize_output"]
+            else lambda x, *a, **kw: x
+        )
+        self.reproduce_command_explanation = ""
+        std_input = self.stdin
+        unicode_stdin = self.parameters["unicode_stdin"]
+
+        if self.parameters["show_reproduce_command"]:
+            indent = "  "
+            self.reproduce_command_explanation += (
+                "You can reproduce this test by executing these commands:\n"
+            )
+            if self.failed_compiler:
+                self.reproduce_command_explanation += colored(
+                    indent + self.failed_compiler + "\n", "blue"
+                )
+            command = (
+                " ".join(self.command)
+                if isinstance(self.command, list)
+                else self.command
+            )
+            if std_input:
+                if unicode_stdin:
+                    echo_command = echo_command_for_string(std_input)
+                else:
+                    echo_command = (
+                        "echo -n" + "'" + self.insert_hex_slash_x(std_input[1:].hex())
+                    )
+
+                if not self.stdin_file_name() or len(echo_command) < 128:
+                    if "shell" in self.parameters and (
+                        ";" in command or "&" in command or "|" in command
+                    ):
+                        command = "(" + command + ")"
+                    command = f"{echo_command} | {command}"
+                else:
+                    command += " <" + self.stdin_file_name()
+                command = indent + command
+            else:
+                if "shell" in self.parameters and not self.parameters.get(
+                    "no_replace_semicolon_reproduce_command", ""
+                ):
+                    command = re.sub(r"\s*;\s*", "\n" + indent, command)
+                command = indent + command
+
+            self.reproduce_command_explanation += colored(command + "\n", "blue")
+        return self.reproduce_command_explanation
 
     def get_long_explanation(self):
         if self.debug:
@@ -345,64 +434,6 @@ class _Test:
                     expected_bits, actual_bits
                 )
 
-        std_input = self.stdin
-        unicode_stdin = self.parameters["unicode_stdin"]
-
-        # we don't want to consider newlines when dealing with non-unicode output
-        if self.parameters["unicode_stdin"]:
-            n_input_lines = std_input.count("\n")
-
-        if self.parameters["show_stdin"]:
-            if unicode_stdin and std_input and n_input_lines < 32:
-                self.long_explanation += (
-                    f"\nThe input for this test was:\n{colored(std_input, 'yellow')}\n"
-                )
-                if std_input[-1] != "\n" and "\n" in std_input[:-2]:
-                    self.long_explanation += (
-                        "Note: last character in above input is not '\\n'\n\n"
-                    )
-            elif (not unicode_stdin) and std_input:
-                self.long_explanation += f"\nThe input for this test was:\n{colored('0x' + std_input.hex(), 'yellow')}\n"
-
-        if self.parameters["show_reproduce_command"]:
-            indent = "  "
-            self.long_explanation += (
-                "You can reproduce this test by executing these commands:\n"
-            )
-            if self.failed_compiler:
-                self.long_explanation += colored(
-                    indent + self.failed_compiler + "\n", "blue"
-                )
-            command = (
-                " ".join(self.command)
-                if isinstance(self.command, list)
-                else self.command
-            )
-            if std_input:
-                if unicode_stdin:
-                    echo_command = echo_command_for_string(std_input)
-                else:
-                    echo_command = (
-                        "echo -n" + "'" + self.insert_hex_slash_x(std_input[1:].hex())
-                    )
-
-                if not self.stdin_file_name() or len(echo_command) < 128:
-                    if "shell" in self.parameters and (
-                        ";" in command or "&" in command or "|" in command
-                    ):
-                        command = "(" + command + ")"
-                    command = f"{echo_command} | {command}"
-                else:
-                    command += " <" + self.stdin_file_name()
-                command = indent + command
-            else:
-                if "shell" in self.parameters and not self.parameters.get(
-                    "no_replace_semicolon_reproduce_command", ""
-                ):
-                    command = re.sub(r"\s*;\s*", "\n" + indent, command)
-                command = indent + command
-
-            self.long_explanation += colored(command + "\n", "blue")
         return self.long_explanation
 
     def report_difference(self, name, expected, actual):
