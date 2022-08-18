@@ -998,7 +998,7 @@ PARAMETER_LIST += [
 def default_description(parameters):
     command = parameters["command"]
     if isinstance(command, list):
-        return " ".join(p for p in command)
+        return " ".join(command)
     else:
         return command
 
