@@ -9,6 +9,8 @@ max_open_files_should_fail      max_open_files=5         command="/bin/true 3>3 
 
 max_cpu_seconds_should_fail      max_cpu_seconds=1       command="while true; do :; done"
 
+max_cpu_seconds_python_should_fail      max_cpu_seconds=1       command="python3 -c 'while 1: pass'"
+
 max_file_size_bytes_should_fail  max_file_size_bytes=32  command="yes >out"
 max_stdout_bytes_should_fail     max_stdout_bytes=32     command="yes"
 max_stderr_bytes_should_fail     max_stderr_bytes=32     command="yes 1>&2"
