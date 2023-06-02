@@ -86,7 +86,7 @@ def parse_stream(
     tests = collections.OrderedDict(initial_tests or {})
     global_parameters = dict(initial_parameters or {})
     test_local_parameters = collections.defaultdict(set)
-    for (line_number, values, _source_lines) in get_line_literals(
+    for line_number, values, _source_lines in get_line_literals(
         stream, source_name, global_parameters, debug=debug
     ):
         if values:
@@ -126,7 +126,7 @@ def parse_stream(
 
 def print_tests(tests):
     # 	last_parameters = {}
-    for (label, parameters) in tests.items():
+    for label, parameters in tests.items():
         print("***", label, end=" = ")
         p = dict(
             (k, v)
@@ -195,7 +195,6 @@ def parse_line_assignments(values, debug=0):
     while values:
         value = values.pop(0)
         if value == ASSIGNMENT:
-
             if (
                 not last_word
                 or not last_word.isidentifier()
@@ -252,8 +251,7 @@ def get_line_literals(stream, source_name, parameters, debug=0):
     """
     source_lines = ""
     start_lines_number = 1
-    for (line_number, line) in enumerate(stream, 1):
-
+    for line_number, line in enumerate(stream, 1):
         if source_lines == "":
             start_lines_number = line_number
 
@@ -376,7 +374,7 @@ def parse_literals(combined_lines, parameters, debug=0):
 def stringize(x):
     """convert to str all sub-objects in x which are not dicts and list"""
     if isinstance(x, dict):
-        for (k, v) in x.items():
+        for k, v in x.items():
             x[k] = stringize(v)
     elif isinstance(x, list):
         for i in range(len(x)):
@@ -461,7 +459,7 @@ def output_stream_without_parameters(
     tests = collections.OrderedDict(initial_tests or {})
     global_parameters = dict(initial_parameters or {})
     test_local_parameters = collections.defaultdict(set)
-    for (line_number, values, source_lines) in get_line_literals(
+    for line_number, values, source_lines in get_line_literals(
         stream, source_name, global_parameters, debug=debug
     ):
         parameters = process_line(
@@ -491,7 +489,7 @@ def output_lines_without_parameters(source_lines, parameters, remove_parameters,
         return
 
     if "label" not in parameters:
-        for (k, v) in parameters.items():
+        for k, v in parameters.items():
             if k not in remove_parameters:
                 print(f"{k}={repr(v)}", file=file)
         return
@@ -503,7 +501,7 @@ def output_lines_without_parameters(source_lines, parameters, remove_parameters,
         return
 
     print(parameters["label"], end="", file=file)
-    for (k, v) in parameters.items():
+    for k, v in parameters.items():
         if k not in remove_parameters and k != "label":
             print(f" {k}={repr(v)}", end="", file=file)
     print(file=file)

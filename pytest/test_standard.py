@@ -3,6 +3,7 @@ import subprocess
 import re
 import sys
 
+
 # created from at's original test script (yes this script needs to be thrown into a fire)
 # don't forget to add `sys.exectuable` for every subprocess call to ensure same python interpreter is used
 class TestStandard:
@@ -46,7 +47,6 @@ class TestStandard:
         assert p.stdout == expected_stdout
 
     def test_environment(self):
-
         test_folder = "tests/environment"
         test_env = {
             "SAMPLE_ENVIRONMENT_VARIABLE": "sample_value"

@@ -38,7 +38,6 @@ def run_tests(
     args: Namespace,
     file=sys.stdout,
 ) -> int:
-
     debug = global_parameters["debug"]
     colored = (
         termcolor_colored
@@ -158,7 +157,6 @@ def run_one_test(
 
     individual_tests = []
     for compile_command in parameters["compile_commands"] or [""]:
-
         if compile_command:
             link_program(
                 parameters["program"], compile_command, test_files, debug=debug
@@ -447,7 +445,7 @@ def provide_multi_language_support(
         return []
     elif suffix in ["c", "cc"]:
         compilers = default_compilers.get(suffix, [])
-        for (index, compiler) in enumerate(compilers):
+        for index, compiler in enumerate(compilers):
             compilers[index] = [program if a == "%" else str(a) for a in compiler]
         return compilers
     # Just in case. If expected behaviour is None, can do that
@@ -588,7 +586,7 @@ def print_tests_and_expected_output(
 def print_expected_output(tests: Dict[str, _Test], args: Namespace, file) -> None:
     # ignore output from tests
     with open(os.devnull, "w", encoding="utf-8") as dev_null:
-        for (label, test) in tests.items():
+        for label, test in tests.items():
             if label not in args.labels:
                 continue
             # override any checkers, so expected output can be generated from solutions with non-permitted features

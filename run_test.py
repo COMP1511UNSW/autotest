@@ -115,7 +115,7 @@ class _Test:
         return self.test_passed
 
     def check_files(self):
-        for (pathname, expected_contents) in self.parameters["expected_files"].items():
+        for pathname, expected_contents in self.parameters["expected_files"].items():
             try:
                 if self.parameters["unicode_files"]:
                     with open(pathname, encoding="UTF-8", errors="replace") as f:
@@ -458,7 +458,7 @@ class _Test:
             if self.parameters["colorize_output"]
             else lambda x, *a, **kw: x
         )
-        for (line_number, line) in enumerate(str.splitlines()):
+        for line_number, line in enumerate(str.splitlines()):
             m = re.search(r"^(.*?)([\x00-\x08\x14-\x1f\x7f-\xff])", line)
             if not m:
                 continue

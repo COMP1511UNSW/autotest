@@ -408,7 +408,7 @@ def sanitize_string(
             lines = lines[0 : last_line_index + 2 - repeats]
 
     sanitized_lines = []
-    for (line_number, line) in enumerate(lines):
+    for line_number, line in enumerate(lines):
         if line_number >= max_lines_shown and not show_all_lines:
             sanitized_lines.append("...\n")
             break

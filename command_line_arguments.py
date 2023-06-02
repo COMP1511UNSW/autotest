@@ -415,7 +415,7 @@ def check_obsolete_arguments(args):
     """
     give helpful message for obsolete arguments then die
     """
-    for (argument, parameter_name) in PARAMETERS_MATCHING_OBSOLETE_ARGUMENTS:
+    for argument, parameter_name in PARAMETERS_MATCHING_OBSOLETE_ARGUMENTS:
         if getattr(args, argument, None) is not None:
             print(getattr(args, argument))
             die(

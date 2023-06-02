@@ -269,7 +269,7 @@ def finalize_compiler_checker_list(name, compilers_or_checkers, parameters):
             f"invalid value for parameter '{name}': {compilers_or_checkers}"
         )
     program = parameters["program"]
-    for (index, command) in enumerate(compilers_or_checkers):
+    for index, command in enumerate(compilers_or_checkers):
         if not command:
             raise TestSpecificationError(
                 f"invalid value for parameter '{name}': {compilers_or_checkers}"
@@ -410,7 +410,6 @@ PARAMETER_LIST += [
 
 
 def finalize_compile_commands(_name, value, parameters):
-
     # parameter has been set directly
     if isinstance(value, str):
         return [str]
@@ -430,7 +429,6 @@ def finalize_compile_commands(_name, value, parameters):
 
     compile_commands = []
     for command in parameters["compilers"]:
-
         command_as_list = command
         if isinstance(command, str):
             command_as_list = command.split()
@@ -794,7 +792,7 @@ def finalize_expected_files(name, expected_files, parameters):
                 efc = [filename]
         expected_files[efn] = efc
 
-    for (k, v) in list(expected_files.items()):
+    for k, v in list(expected_files.items()):
         if not isinstance(k, str):
             raise TestSpecificationError(
                 f"error invalid type for parameter '{name}' key: {k}"
@@ -1327,7 +1325,7 @@ def set_parameter_aliases(parameters, debug=0):
     """
     set any any parameters which have non-calculated default values
     """
-    for (parameter, value) in list(parameters.items()):
+    for parameter, value in list(parameters.items()):
         alias = PARAMETER_ALIASES.get(parameter, "")
         if alias:
             parameters[alias] = value
