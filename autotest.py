@@ -1,4 +1,4 @@
-#!/usr/bin/python3 -I
+#!/usr/bin/python3.9 -I
 
 # main function for autotests
 
@@ -26,6 +26,7 @@ from command_line_arguments import process_arguments
 from copy_files_to_temp_directory import copy_files_to_temp_directory
 from run_tests import run_tests, run_tests_creating_log, generate_expected_output
 from upload_results import upload_results_http
+from helper import run_helper
 from command_line_arguments import REPO_INFORMATION
 from sandbox import run_tests_in_sandbox, continue_inside_sandbox
 
@@ -106,6 +107,8 @@ def run_autotest():
             exit_status = run_tests_creating_log(tests, parameters, args)
         else:
             exit_status = run_tests(tests, parameters, args)
+
+    run_helper(tests, parameters, args)
 
     if uploading_results and not inside_sandbox:
         # upload of tests in sandbox may fail because network is sandbox
