@@ -41,7 +41,7 @@ def run_helper(tests, parameters, args):
         with open(filename) as f:
             source = f.read(MAX_FILE_SIZE)
     except OSError:
-        pass
+        return
 
     helper_info = {
         "test_label": test.label,
