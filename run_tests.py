@@ -176,7 +176,7 @@ def run_one_test(
             compile_command_str = " ".join(compile_command)
         else:
             compile_command_str = compile_command
-        if not parameters["compiler_args"]:
+        if compile_command and not parameters["compiler_args"]:
             compile_command_str += " " + " ".join(test_files)
 
         individual_test.run_test(compile_command=compile_command_str)
