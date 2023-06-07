@@ -42,7 +42,6 @@ def run_helper(tests, parameters, args):
             source = f.read(MAX_FILE_SIZE)
     except OSError:
         return
-
     helper_info = {
         "test_label": test.label,
         "stdin": stdin,
@@ -51,7 +50,8 @@ def run_helper(tests, parameters, args):
         "expected_stdout": expected_stdout,
         "file": filename,
         "source": source,
-    }
+        "autotest_directory": args.autotest_directory,
+   }
     for k, v in helper_info.items():
         os.environ["HELPER_" + k.upper()] = v
     os.environ["HELPER_JSON"] = json.dumps(helper_info, separators=(",", ":"))
