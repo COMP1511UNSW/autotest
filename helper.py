@@ -51,7 +51,7 @@ def run_helper(tests, parameters, args):
         "file": filename,
         "source": source,
         "autotest_directory": args.autotest_directory,
-   }
+    }
     for k, v in helper_info.items():
         os.environ["HELPER_" + k.upper()] = v
     os.environ["HELPER_JSON"] = json.dumps(helper_info, separators=(",", ":"))
