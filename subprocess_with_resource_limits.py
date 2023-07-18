@@ -28,8 +28,7 @@ def run(command, **parameters):
     return output
 
 
-@asyncio.coroutine
-def run_coroutine(
+async def run_coroutine(
     loop,
     command,
     stdin=None,
@@ -117,7 +116,7 @@ def run_coroutine(
         stdin=stdin_stream,
     )
 
-    transport, protocol = yield from process
+    transport, protocol = await process
     errors = []
     if max_real_seconds:
 
@@ -142,7 +141,7 @@ def run_coroutine(
         timer.start()
     # Wait for the subprocess exit using the process_exited() method
     # of the protocol
-    yield from exit_future
+    await exit_future
     if max_real_seconds:
         timer.cancel()
     transport.close()
