@@ -1,4 +1,4 @@
-#!/usr/bin/python3.9 -I
+#!/usr/bin/python3 -I
 
 # main function for autotests
 
