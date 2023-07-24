@@ -200,6 +200,11 @@ def normalize_arguments(args, tests):
             args.git = arg
         elif os.path.isfile(arg):
             args.optional_files += [arg]
+        elif any(list(map(lambda x: re.search(arg, x), test_labels))):
+            try:
+                args.labels += list(filter(lambda x: re.search(arg, x), test_labels))
+            except re.error:
+                pass
         else:
             matching_labels = [
                 t
