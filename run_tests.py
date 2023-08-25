@@ -599,7 +599,7 @@ def print_expected_output(tests: Dict[str, _Test], args: Namespace, file) -> Non
             test.parameters["max_file_size_bytes"] = 100000000000000000000
             # override dcc output checking
             test.parameters["dcc_output_checking"] = False
-            
+
             run_one_test(test, file=dev_null)
             if not hasattr(test, "stdout"):
                 die(f"Test {label} could not be run")
