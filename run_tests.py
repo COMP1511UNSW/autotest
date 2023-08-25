@@ -591,10 +591,19 @@ def print_expected_output(tests: Dict[str, _Test], args: Namespace, file) -> Non
                 continue
             # override any checkers, so expected output can be generated from solutions with non-permitted features
             test.parameters["checkers"] = []
+            # override limits
+            test.parameters["max_stdout_bytes"] = 100000000000000000000
+            test.parameters["max_stderr_bytes"] = 100000000000000000000
+            test.parameters["max_file_size_bytes"] = 1000000000
+            test.parameters["max_real_seconds"] = 1000000000
+            test.parameters["max_cpu_seconds"] = 1000000000
+            # override dcc output checking
+            test.parameters["dcc_output_checking"] = False
+
             run_one_test(test, file=dev_null)
             if not hasattr(test, "stdout"):
                 die(f"Test {label} could not be run")
             if test.stdout:
                 print(f"{label} expected_stdout={repr(test.stdout)}", file=file)
             if test.stderr:
-                print(f"{label} expected_stdout={repr(test.stderr)}", file=file)
+                print(f"{label} expected_stderr={repr(test.stderr)}", file=file)
