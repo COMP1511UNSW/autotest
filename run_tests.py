@@ -594,9 +594,9 @@ def print_expected_output(tests: Dict[str, _Test], args: Namespace, file) -> Non
             # override limits
             test.parameters["max_stdout_bytes"] = 100000000000000000000
             test.parameters["max_stderr_bytes"] = 100000000000000000000
-            test.parameters["max_real_seconds"] = 100000000000000000000
-            test.parameters["max_cpu_seconds"] = 100000000000000000000
-            test.parameters["max_file_size_bytes"] = 100000000000000000000
+            test.parameters["max_file_size_bytes"] = 1000000000
+            test.parameters["max_real_seconds"] = 1000000000
+            test.parameters["max_cpu_seconds"] = 1000000000
             # override dcc output checking
             test.parameters["dcc_output_checking"] = False
 
