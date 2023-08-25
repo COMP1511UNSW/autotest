@@ -6,6 +6,7 @@ from termcolor import colored as termcolor_colored
 from parse_test_specification import output_file_without_parameters
 from util import die
 from command_line_arguments import REPO
+from parameter_descriptions import finalize_dcc_output_checking
 
 # necessary for typehinting
 from typing import Dict, List, Any, Union
@@ -598,7 +599,7 @@ def print_expected_output(tests: Dict[str, _Test], args: Namespace, file) -> Non
             test.parameters["max_real_seconds"] = 1000000000
             test.parameters["max_cpu_seconds"] = 1000000000
             # override dcc output checking
-            test.parameters["dcc_output_checking"] = False
+            finalize_dcc_output_checking("dcc_output_checking", False, test.parameters)
 
             run_one_test(test, file=dev_null)
             if not hasattr(test, "stdout"):
