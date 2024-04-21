@@ -126,7 +126,7 @@ def explain_output_differences(
         and sorted(canonical_expected_lines) == sorted(canonical_actual_lines)
     ):
         explanation += colored(
-            f"\nYour program produced the correct {name} lines but in the wrong order.\n"
+            f"\nYour program produced the correct {name} lines but in the wrong order.\n",
             "red",
         )
 
