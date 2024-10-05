@@ -53,7 +53,7 @@ def run_helper(tests, parameters, args):
         "autotest_directory": args.autotest_directory,
     }
     for k, v in helper_info.items():
-        os.environ["HELPER_" + k.upper()] = v.replace('\x00', '\\x00')
+        os.environ["HELPER_" + k.upper()] = v.replace("\x00", "\\x00")
     os.environ["HELPER_JSON"] = json.dumps(helper_info, separators=(",", ":"))
 
     if args.debug:
