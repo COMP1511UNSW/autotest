@@ -386,9 +386,11 @@ def get_unique_program_name(
     )
     compile_command_str = compile_command_str.replace(" ", "_")
     return (
-        program
+        "._"
+        + program
         + "."
         + "__".join([compile_command_str] + test_files).replace("/", "___")
+        + "_"
     )
 
 
