@@ -199,6 +199,8 @@ class _Test:
             if self.debug:
                 print(f"after filter s='{s}'")
 
+        if self.parameters["aggressive_ignore_whitespace"]:
+            s = re.sub(r'[\t ]+', '', s)
         if self.parameters["ignore_case"]:
             s = s.lower()
         s = s.translate(self.canonical_translator)
@@ -207,6 +209,7 @@ class _Test:
             s = re.sub(r"^\n+", "", s)
         if self.parameters["ignore_trailing_whitespace"]:
             s = re.sub(r"[ \t]+\n", "\n", s)
+
         if self.debug > 1:
             print(f"make_string_canonical('{raw_str}') -> '{s}'")
         return s
