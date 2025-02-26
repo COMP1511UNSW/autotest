@@ -262,6 +262,17 @@ def get_line_literals(stream, source_name, parameters, debug=0):
             if line.startswith("compiler_args="):
                 line = re.sub(r"([ =])(\S+=\S+)", r"\1'\2'", line)
 
+            # tokenize.generate_tokens became more strict in Python 3.12
+            # https://github.com/python/cpython/issues/105238
+            #
+            # This made some bare strings invalid in autotest.
+            #
+            # Most problematic test labels starting with a digit became invalid
+            # if they were not valid numeric literal, e.g:  4_check
+            #
+            # as hack for backwards compatiblity we surround such labels with single-quotes
+            line = re.sub(r'^(\d\w+)\s', r"'\1' ", line)
+
         source_lines += line
         try:
             yield (
