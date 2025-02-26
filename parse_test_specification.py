@@ -271,7 +271,7 @@ def get_line_literals(stream, source_name, parameters, debug=0):
             # if they were not valid numeric literal, e.g:  4_check
             #
             # as hack for backwards compatiblity we surround such labels with single-quotes
-            line = re.sub(r'^(\d\w+)\s', r"'\1' ", line)
+            line = re.sub(r"^(\d\w+)\s", r"'\1' ", line)
 
         source_lines += line
         try:
