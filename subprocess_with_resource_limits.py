@@ -17,14 +17,18 @@ def run(command, **parameters):
         loop = asyncio.ProactorEventLoop()
         asyncio.set_event_loop(loop)
     else:
-        loop = asyncio.get_event_loop()
+        # asyncio.get_event_loop() no longer implicitly creates a loop in Python 3.14+
+        loop = asyncio.new_event_loop()
     try:
         cooroutine = run_coroutine(loop, command, **parameters)
         output = loop.run_until_complete(cooroutine)
     except KeyboardInterrupt:
+        loop.close()
         sys.exit(1)
     except OSError as e:
+        loop.close()
         return (b"", re.sub(r"^\[.*?\] *", "", str(e)).encode("UTF-8"), 2)
+    loop.close()
     return output
 
 
