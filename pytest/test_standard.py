@@ -167,6 +167,11 @@ class TestStandard:
         ):
             success = False
         if not re.search(
+            r"""Test max_cpu_seconds_python_should_fail \("python3 -c 'while 1: pass'"\) - failed \(errors\)""",
+            p.stdout,
+        ):
+            success = False
+        if not re.search(
             r"Test max_file_size_bytes_should_fail \('yes >out'\) - failed \(errors\)",
             p.stdout,
         ):
@@ -180,7 +185,7 @@ class TestStandard:
             p.stdout,
         ):
             success = False
-        if not re.search(r"1 tests passed 5 tests failed", p.stdout):
+        if not re.search(r"1 tests passed 6 tests failed", p.stdout):
             success = False
 
         if success is False:
