@@ -20,6 +20,47 @@ IGNORE_TOKENS = set(
 
 ASSIGNMENT = None
 
+# f-strings became multi-token (PEP 701) in Python 3.12; on earlier versions
+# these are None and merge_fstring_tokens() is a pass-through
+FSTRING_START = getattr(tokenize, "FSTRING_START", None)
+FSTRING_END = getattr(tokenize, "FSTRING_END", None)
+
+
+def merge_fstring_tokens(tokens):
+    """
+    Python 3.12+ tokenizers (PEP 701) split f-strings into FSTRING_START,
+    FSTRING_MIDDLE and expression tokens, closed by FSTRING_END (possibly
+    nested). Before 3.12 an f-string was a single STRING token, which is what
+    this parser (and get_token_characters()'s eval()) expects. Token text in a
+    run is contiguous source text, so concatenating the raw token strings
+    reconstructs the original f-string exactly.
+    """
+    run = None
+    start = end = None
+    depth = 0
+    for token in tokens:
+        if run is None:
+            if FSTRING_START is not None and token.type == FSTRING_START:
+                run = [token.string]
+                start = token.start
+                end = token.end
+            else:
+                yield token
+        else:
+            run.append(token.string)
+            end = token.end
+            if token.type == FSTRING_START:
+                depth += 1
+            elif token.type == FSTRING_END:
+                if depth == 0:
+                    yield tokenize.TokenInfo(
+                        tokenize.STRING, "".join(run), start, end, None
+                    )
+                    run = None
+                    depth = 0
+                else:
+                    depth -= 1
+
 
 def parse_file(
     pathname,
@@ -303,7 +344,9 @@ def parse_literals(combined_lines, parameters, debug=0):
     last_token = None
     literals = []
 
-    for token in tokenize.generate_tokens(io.StringIO(combined_lines).readline):
+    for token in merge_fstring_tokens(
+        tokenize.generate_tokens(io.StringIO(combined_lines).readline)
+    ):
         if debug > 3:
             print(f"token {token}")
 
