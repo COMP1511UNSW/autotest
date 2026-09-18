@@ -157,10 +157,15 @@ def run_one_test(
     print(description, end="", file=file)
 
     individual_tests = []
+    linked_program: Dict[str, str] = {}
     for compile_command in parameters["compile_commands"] or [""]:
         if compile_command:
             link_program(
-                parameters["program"], compile_command, test_files, debug=debug
+                parameters["program"],
+                compile_command,
+                test_files,
+                linked_program=linked_program,
+                debug=debug,
             )
 
         if parameters["setup_command"]:
@@ -181,6 +186,10 @@ def run_one_test(
             compile_command_str += " " + " ".join(test_files)
 
         individual_test.run_test(compile_command=compile_command_str)
+
+        if linked_program:
+            unlink_program(linked_program=linked_program, debug=debug)
+
         individual_tests.append(individual_test)
         if not individual_test.stderr_ok and not parameters["allow_unexpected_stderr"]:
             break
@@ -301,10 +310,7 @@ def run_compilers(
         try:
             if debug > 1:
                 print(f"os.rename({program}, {unique_program_name})", file=sys.stderr)
-            if not os.path.islink(program):
-                # this rename, in conjunction with link_program, will *always* cause a symlink loop
-                # there probably are reasons to rename a symlink but unless link_program is changed we cannot do so
-                os.rename(program, unique_program_name)
+            os.rename(program, unique_program_name)
         except OSError as e:
             if debug:
                 print(e, file=file)
@@ -339,15 +345,18 @@ def link_program(
     unique_program_name = get_unique_program_name(program, compile_command, test_files)
 
     # should already be linked
-    if linked_program.get(program, None) == unique_program_name and os.path.exists(
-        program
+    if (
+        linked_program.get(program, None) == unique_program_name
+        and os.path.exists(program)
+        and os.path.exists(unique_program_name)
+        and os.stat(program).st_ino == os.stat(unique_program_name).st_ino
     ):
         if debug > 2:
             print("link_program - using existing link")
         return
 
     # for safety don't remove anything but a link
-    if os.path.islink(program):
+    if program in linked_program:
         if debug > 2:
             print("link_program - removing existing link")
         os.unlink(program)
@@ -357,18 +366,60 @@ def link_program(
         if debug > 3:
             print("link_program - before link command")
             subprocess.call("pwd", shell=True)
-            subprocess.call("ls -l", shell=True)
-            print(f"os.symlink({unique_program_name}, {program})", file=sys.stderr)
+            subprocess.call("ls -il", shell=True)
 
-        # os.path.islink() only checks for symlinks, not hard links
-        os.symlink(unique_program_name, program)
+        if debug > 2:
+            print(f"os.link({unique_program_name}, {program})", file=sys.stderr)
+
+        os.link(unique_program_name, program)
 
         if debug > 3:
             print("link_program - after link command")
             subprocess.call("pwd", shell=True)
-            subprocess.call("ls -l", shell=True)
+            subprocess.call("ls -il", shell=True)
 
     linked_program[program] = unique_program_name
+
+
+def unlink_program(
+    linked_program: Dict[str, str] = {},
+    debug: int = 0,
+) -> None:
+    """
+    linked_program should be a dict shuch that each key is a hard link to its value
+
+    This function will remove all keys from the file system,
+    even if they are not hard links (but is nice enough tell you when it does so)
+
+    This function is intended to be the inverse of link_program
+    """
+    if debug > 3:
+        print("unlink_program - before unlink commands")
+        subprocess.call("pwd", shell=True)
+        subprocess.call("ls -il", shell=True)
+
+    for link, target in linked_program.items():
+        try:
+            if not os.stat(link).st_ino == os.stat(target).st_ino:
+                if debug > 1:
+                    print(f"unlink_program {link} and {target} are not linked")
+        except OSError:
+            pass
+
+        if debug > 2:
+            print(f"unlink_program unlinking {link} from {target}")
+
+        try:
+            os.unlink(link)
+        except OSError:
+            pass
+
+    if debug > 3:
+        print("unlink_program - after unlink commands")
+        subprocess.call("pwd", shell=True)
+        subprocess.call("ls -il", shell=True)
+
+    linked_program.clear()
 
 
 def get_unique_program_name(
