@@ -982,6 +982,14 @@ PARAMETER_LIST += [
     ),
     "### Parameters controlling information printed about test",
     Parameter(
+        "aggressive_ignore_whitespace",
+        default=False,
+        description="""
+            Ignore **ALL** whitespace (spaces and tabs, including those inside lines) when comparing actual & expected output.<br>
+            This ensures stricter whitespace removal for comparison.
+        """,
+    ),
+    Parameter(
         "colorize_output",
         default=lambda parameters: sys.stdout.isatty(),
         required_type=bool,
