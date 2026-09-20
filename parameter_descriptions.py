@@ -1295,6 +1295,18 @@ PARAMETER_LIST += [
             If true, programs run in the **`sandbox`** have no network access:
             they are given a private network namespace with only a loopback interface.<br>
             Set to false to allow tests to use the network.
+
+            An exercise whose tests fetch a URL, or whose **`setup_command`** or
+            **`pre_compile_command`** installs packages, needs `sandbox_network=False`.
+            Without it those tests fail, or cannot be run, with no indication that the
+            network was the reason.  Everything else the sandbox provides is kept:
+            system directories stay read-only, the invoking user's files stay
+            unreachable, and tests still cannot see each other.
+
+            A test that depends on a service outside the machine is not reproducible:
+            it fails when the service changes, is unreachable, or is slow, and it fails
+            for every student at once.  Prefer supplying the data as a file where the
+            exercise allows it.
         """,
     ),
     Parameter(
