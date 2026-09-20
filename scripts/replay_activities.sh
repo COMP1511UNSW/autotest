@@ -40,6 +40,18 @@
 #                   randomness, so they differ from themselves.  They are
 #                   reported and not counted.  scripts/replay_unstable.txt
 #                   lists the ones found in the 26T2 material.
+#   REPLAY_APPROVED_CHANGES
+#                   a file of verdict changes somebody has read and accepted.
+#                   They are reported and not counted, so a change which
+#                   deliberately improves a verdict can still gate.  A whole
+#                   line must match -- "name | old | new" -- so an activity
+#                   which moves somewhere else next time fails again.
+#   REPLAY_WRITE_APPROVED
+#                   write this run's verdict changes to this file, in that
+#                   format, for a person to read and cut down to the ones
+#                   they accept.  Never point it at the file you are also
+#                   passing as REPLAY_APPROVED_CHANGES: approving a change
+#                   because it happened is not approving it.
 #   REPLAY_OLD_ARGS extra arguments for the old tree only.  Give both trees
 #                   the same directory and only one of these to measure one
 #                   setting rather than one version: --no_sandbox here and
@@ -99,6 +111,8 @@ extra_args=${REPLAY_ARGS:-}
 old_extra_args=${REPLAY_OLD_ARGS:-}
 floor=${REPLAY_IDENTICAL_FLOOR:-0}
 unstable=${REPLAY_KNOWN_UNSTABLE:-}
+approved=${REPLAY_APPROVED_CHANGES:-}
+write_approved=${REPLAY_WRITE_APPROVED:-}
 work=${REPLAY_TMPDIR:-${TMPDIR:-/tmp}}/autotest-replay.$$
 mkdir -p "$work/old" "$work/new" || exit 1
 
@@ -200,27 +214,45 @@ echo "$(wc -l <"$changed") activities differed"
 # A changed verdict is what matters; everything else is a difference in
 # wording that a person should still read, but which does not change a mark.
 verdict='[0-9][0-9]* tests passed'
+none='(no verdict: autotest did not finish)'
 n_verdicts_changed=0
 n_unstable=0
+n_approved=0
+test -z "$write_approved" || : >"$write_approved"
 while read -r name
 do
 	old_verdict=$(grep -o "$verdict.*" "$work/old/$name" | tail -1)
 	new_verdict=$(grep -o "$verdict.*" "$work/new/$name" | tail -1)
 	test "$old_verdict" = "$new_verdict" && continue
+
+	# The whole move, not just the activity's name: an activity whose
+	# verdict was reviewed and accepted must still fail the gate if it
+	# moves somewhere else next time.
+	change="$name | ${old_verdict:-$none} | ${new_verdict:-$none}"
+	test -z "$write_approved" || echo "$change" >>"$write_approved"
+
 	if test -n "$unstable" && grep -qxF "$name" "$unstable" 2>/dev/null
 	then
 		n_unstable=$((n_unstable + 1))
 		echo "  $name (known unstable, not counted)"
+	elif test -n "$approved" && grep -qxF "$change" "$approved" 2>/dev/null
+	then
+		n_approved=$((n_approved + 1))
+		echo "  $name (approved, not counted)"
 	else
 		n_verdicts_changed=$((n_verdicts_changed + 1))
 		echo "  $name"
 	fi
-	echo "      old: ${old_verdict:-(no verdict: autotest did not finish)}"
-	echo "      new: ${new_verdict:-(no verdict: autotest did not finish)}"
+	echo "      old: ${old_verdict:-$none}"
+	echo "      new: ${new_verdict:-$none}"
 done <"$changed"
 
 test "$n_unstable" -eq 0 ||
 	echo "$n_unstable known-unstable activities were not counted"
+test "$n_approved" -eq 0 ||
+	echo "$n_approved approved verdict changes were not counted"
+test -z "$write_approved" ||
+	echo "wrote $(wc -l <"$write_approved") verdict changes to $write_approved"
 
 # The exit status, so that this can gate a change rather than produce a report
 # somebody has to remember to read.  Every defect the fixture suite missed --
