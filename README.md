@@ -141,8 +141,9 @@ Inside the sandbox:
 
 The sandbox does not provide:
 
-* memory or CPU accounting beyond `setrlimit` (`max_rss_bytes`, `max_cpu_seconds`, ...) -
-  cgroups are not used;
+* CPU accounting beyond `setrlimit` (`max_cpu_seconds`, ...) - cgroups are not used.
+  `max_rss_bytes` is enforced, but by autotest sampling the test's process group
+  rather than by the kernel, so a program can briefly exceed it;
 * a disk quota - the test directory is on the host's filesystem and `max_file_size_bytes` limits
   the size of each file but not their number, so a program can fill the disk (for the duration of its test:
   the directory is removed afterwards); only `/tmp` and `/dev/shm` are size-limited, and being in memory,
@@ -207,6 +208,10 @@ For maintainers upgrading from an earlier version of autotest:
 * programs which exit non-zero with no output are no longer silently re-run up to 3 times;
 * the default `PATH` is now `/bin:/usr/bin:/usr/local/bin:$PATH:.` - the current directory is searched last;
 * a resource limit of `0` (`max_cpu_seconds`, `max_real_seconds`, `max_rss_bytes`, ...) now really means no limit;
+* `max_rss_bytes` now limits memory. Linux ignores `RLIMIT_RSS`, so it never did before,
+  and a test whose program uses a lot of memory may fail where it used to pass.
+  The default was raised to 1GB to leave room for the heaviest work seen in real
+  course material; lower it for an exercise that has no reason to use much;
 * the sandbox parameter `sandbox` defaults to `auto`; `sandbox_command` is deprecated and ignored; `--inside_sandbox` is gone;
 * symbolic links in a submission given with `--directory` are copied as links, not followed
   (a link to a file outside the submission does not resolve inside the sandbox);
@@ -660,7 +665,7 @@ Maximum size of any core file written in bytes.
 
 Maximum stack size in bytes (0 for no limit).
 
-**`max_rss_bytes`** = 100000000
+**`max_rss_bytes`** = 1000000000
 
 
 Maximum resident memory in bytes for the test and everything it starts
@@ -674,6 +679,15 @@ test's process group a few times a second and stops it when it goes
 over.  A program can therefore exceed the limit briefly before it is
 stopped, and memory shared between a program and its children is
 counted once for each of them.
+
+The default is deliberately generous, because no existing test
+specification sets this parameter and every test has until now
+inherited a limit that did nothing.  It was chosen by measuring the
+COMP1511, COMP1521 and COMP2041 activities: the heaviest legitimate
+test found needs a little under 512MB to parse 100000 nested JSON
+arrays, while the runaway that prompted the work reached 8GB.  Set
+it lower for an exercise where a student's program has no reason to
+use much memory.
 
 **`max_file_size_bytes`** = 8192000
 

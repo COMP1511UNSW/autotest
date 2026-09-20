@@ -926,7 +926,7 @@ PARAMETER_LIST += [
     ),
     Parameter(
         "max_rss_bytes",
-        default=100000000,
+        default=1000000000,
         description="""
             Maximum resident memory in bytes for the test and everything it starts
             (0 for no limit).
@@ -939,6 +939,15 @@ PARAMETER_LIST += [
             over.  A program can therefore exceed the limit briefly before it is
             stopped, and memory shared between a program and its children is
             counted once for each of them.
+
+            The default is deliberately generous, because no existing test
+            specification sets this parameter and every test has until now
+            inherited a limit that did nothing.  It was chosen by measuring the
+            COMP1511, COMP1521 and COMP2041 activities: the heaviest legitimate
+            test found needs a little under 512MB to parse 100000 nested JSON
+            arrays, while the runaway that prompted the work reached 8GB.  Set
+            it lower for an exercise where a student's program has no reason to
+            use much memory.
         """,
     ),
     Parameter(

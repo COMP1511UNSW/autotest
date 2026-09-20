@@ -91,7 +91,7 @@ def run(  # noqa: C901, PLR0912 - the argument checks, Popen and the result tran
     max_cpu_seconds: int | None = 60,
     max_core_size: int | None = 0,
     max_stack_bytes: int | None = 32000000,
-    max_rss_bytes: int | None = 100000000,
+    max_rss_bytes: int | None = 1000000000,
     max_file_size_bytes: int | None = 8192000,
     max_processes: int | None = 4096,
     max_open_files: int | None = 256,
