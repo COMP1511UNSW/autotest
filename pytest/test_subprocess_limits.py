@@ -514,6 +514,45 @@ def test_memory_limit_of_zero_means_unlimited():
     assert returncode == 0
 
 
+def test_memory_is_sampled_on_a_timer_not_on_every_read(monkeypatch):
+    """
+    The /proc walk runs on the clock, however much the program prints.
+
+    select() returns as soon as a byte is readable, so a program printing
+    steadily woke the supervisor once per read and paid for a walk of every
+    process in /proc each time -- on a teaching server with thousands of
+    processes, on every worker thread at once. That cost more than running
+    the tests in parallel saved.
+
+    Two hundred lines with a flush apiece: the sampler must run a handful of
+    times, not two hundred.
+    """
+    samples = []
+    real_rss = runner._process_group_rss
+
+    def counting_rss(pgid):
+        samples.append(pgid)
+        return real_rss(pgid)
+
+    monkeypatch.setattr(runner, "_process_group_rss", counting_rss)
+
+    chatty = (
+        "import sys, time\n"
+        "for i in range(200):\n"
+        "    print(i); sys.stdout.flush(); time.sleep(0.002)\n"
+    )
+    stdout, _stderr, returncode = run(
+        [sys.executable, "-c", chatty],
+        max_rss_bytes=512 * 1024 * 1024,
+        max_real_seconds=60,
+    )
+    assert returncode == 0
+    assert stdout.count(b"\n") == 200
+    # the program runs for about 0.4s, so a 0.2s timer allows a few samples;
+    # the defect sampled once per read, which is 200
+    assert len(samples) < 20, len(samples)
+
+
 def test_memory_limit_counts_what_the_test_forks():
     """The process that exhausts a machine is as likely to be a child."""
     child = "b = bytearray(400 * 1024 * 1024)\nimport time\ntime.sleep(30)\n"

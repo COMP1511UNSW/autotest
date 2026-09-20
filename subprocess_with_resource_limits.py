@@ -449,6 +449,32 @@ def _supervise(
     return output
 
 
+class _MemorySampler:
+    """
+    Sample a process group's memory on a timer, not on every wakeup.
+
+    select() returns as soon as a byte is readable, so a program which prints
+    steadily woke the supervisor once per read.  Sampling there meant a walk
+    of every process in /proc per read -- on a teaching server with thousands
+    of processes, on every worker thread at once, which cost more than running
+    the tests in parallel saved.
+    """
+
+    def __init__(self, max_rss_bytes: int | None):
+        self.limit = max_rss_bytes
+        self.next_poll = time.monotonic() + _MEMORY_POLL_SECONDS
+
+    def exceeded(self, pgid: int) -> bool:
+        """True iff it is time to look and the group is over its limit."""
+        if not self.limit:
+            return False
+        now = time.monotonic()
+        if now < self.next_poll:
+            return False
+        self.next_poll = now + _MEMORY_POLL_SECONDS
+        return _process_group_rss(pgid) > self.limit
+
+
 def _collect_output(  # noqa: C901 - one branch per way a command is stopped: output, memory, wall clock
     process: subprocess.Popen[bytes],
     pgid: int,
@@ -473,6 +499,7 @@ def _collect_output(  # noqa: C901 - one branch per way a command is stopped: ou
     selector = selectors.DefaultSelector()
     for fd in streams:
         selector.register(fd, selectors.EVENT_READ)
+    sampler = _MemorySampler(max_rss_bytes)
     try:
         while selector.get_map():
             timeout = None
@@ -503,7 +530,7 @@ def _collect_output(  # noqa: C901 - one branch per way a command is stopped: ou
                 output.killed = True
                 _kill_process_group(pgid)
                 return
-            if max_rss_bytes and _process_group_rss(pgid) > max_rss_bytes:
+            if sampler.exceeded(pgid):
                 _memory_exceeded(output, pgid, max_rss_bytes)
                 return
             if deadline is not None and time.monotonic() >= deadline:

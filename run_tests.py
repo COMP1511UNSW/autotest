@@ -18,6 +18,7 @@
 # on).
 
 import concurrent.futures
+import contextlib
 import copy
 import glob
 import io
@@ -126,6 +127,9 @@ class RunContext:
         # inside the temporary tree cleanup_all() removes
         self.temp_root = os.path.dirname(self.shared_dir)
         self.lock = threading.Lock()
+        # held around a per-test copy only while the shared directory holds a
+        # file whose mode forbids reading: see copy_readable and copy_lock()
+        self.unreadable_file_lock = threading.Lock()
         self.sandbox_notes: list[str] = []
         self.runner = CommandRunner(
             getattr(args, "sandbox_config", None),
@@ -142,6 +146,52 @@ class RunContext:
         # hex-stripped long explanation -> label of the first test which
         # produced it, for "failed (X - same as Test Y)"
         self.previous_errors: dict[str, str] = {}
+        # set by detect_unreadable_files() before any worker starts, and
+        # left False for a serial run, which cannot race with itself
+        self._shared_dir_has_unreadable_file: bool = False
+
+    def detect_unreadable_files(self) -> None:
+        """
+        Ask, once, whether the shared directory holds a file nothing can read.
+
+        Called on the main thread before any worker starts, and never after.
+        Asking later would be asking during another worker's copy: copy_readable
+        widens the mode of exactly such a file for the length of its copy, so a
+        probe that ran inside that window would find the file readable, conclude
+        there was nothing to protect, and turn the lock off for every thread.
+        That is not a theoretical ordering -- it is what made the test for this
+        pass alone and fail under load.
+        """
+        self._shared_dir_has_unreadable_file = directory_has_unreadable_file(
+            self.shared_dir
+        )
+        if self._shared_dir_has_unreadable_file and self.debug > 1:
+            print(
+                "a file in the shared directory can not be read:"
+                " per-test copies will be serialised",
+                file=sys.stderr,
+            )
+
+    def copy_lock(self) -> "contextlib.AbstractContextManager[Any]":
+        """
+        The lock a per-test copy of the shared directory must hold, if any.
+
+        copy_readable has to widen the mode of an unreadable file in the
+        shared directory to copy it, and that file is one every other worker
+        is copying at the same time: a worker copying while another holds the
+        mode open takes the widened mode, and a test which inspects file
+        permissions is then marked on the wrong one.  COMP1521's file_modes,
+        the exercise copy_readable was written for, is exactly that test.
+
+        Serialising every copy would cost all of the parallelism, so the
+        shared directory is asked once, by detect_unreadable_files, whether it
+        holds such a file at all.  Almost no exercise does, and those that do
+        serialise their copies, which is what a serial run did anyway.  A
+        serial run never asks, and needs no lock.
+        """
+        if self._shared_dir_has_unreadable_file:
+            return self.unreadable_file_lock
+        return contextlib.nullcontext()
 
     def note_sandbox(self, sandbox) -> None:
         """collect what the sandboxes had to say, once, for debug output"""
@@ -425,6 +475,10 @@ def run_tests_concurrently(context: RunContext, tests_to_run: list[_Test]) -> li
         test_files, outcome = prepare_test(context, test, out)
         prepared.append((test, test_files, out, outcome, None))
 
+    # Between the phases, on this thread, while nothing else is copying:
+    # see RunContext.detect_unreadable_files.
+    context.detect_unreadable_files()
+
     # phase 2: each test in its own directory, on a worker thread
     n_workers = max(1, int(context.parameters.get("parallel_tests", 1)))
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=n_workers)
@@ -599,6 +653,19 @@ def copy_file_data(source: str, destination: str) -> None:
     shutil.copystat(source, destination)
 
 
+def directory_has_unreadable_file(directory: str) -> bool:
+    """Does any file under directory have a mode which forbids reading it?"""
+    for root, _dirs, names in os.walk(directory):
+        for name in names:
+            path = os.path.join(root, name)
+            try:
+                if not os.stat(path).st_mode & stat.S_IRUSR:
+                    return True
+            except OSError:
+                continue
+    return False
+
+
 def copy_readable(source: str, destination: str) -> None:
     """
     Copy one file into a test's own directory, even if its mode forbids reading.
@@ -608,6 +675,12 @@ def copy_readable(source: str, destination: str) -> None:
     mode 223.  Everything here is inside a temporary directory autotest created
     and owns, so the read bit can be added for the copy and the original mode
     restored on both files afterwards.
+
+    The source is in the shared directory, which every other test is copying,
+    so widening its mode is visible to them: the caller holds
+    RunContext.copy_lock() for the whole copy, which serialises the copies of
+    a directory that has such a file.  Without it a test which inspects file
+    permissions is marked on a mode another test's copy happened to widen.
     """
     try:
         copy_file_data(source, destination)
@@ -668,18 +741,30 @@ def execute_test(  # noqa: C901, PLR0912, PLR0915 - one branch per stage of runn
     try:
         try:
             if own_directory:
-                shutil.copytree(
-                    context.shared_dir,
-                    test_dir,
-                    symlinks=True,
-                    ignore=context.ignore_when_copying,
-                    copy_function=copy_readable,
-                    dirs_exist_ok=True,
-                )
-        except shutil.Error as e:
-            # an unreadable file should not stop the test, just as when the
-            # files were first copied to the temporary directory
-            print("Warning:", e, file=sys.stderr)
+                with context.copy_lock():
+                    shutil.copytree(
+                        context.shared_dir,
+                        test_dir,
+                        symlinks=True,
+                        ignore=context.ignore_when_copying,
+                        copy_function=copy_readable,
+                        dirs_exist_ok=True,
+                    )
+        except (shutil.Error, OSError) as e:
+            # A test run against a directory missing some of its files can
+            # fail, or pass, for a reason that has nothing to do with the
+            # submission, and the warning this used to print went to stderr
+            # where the result does not show it.  Not running the test says
+            # so where the student and the marker will both see it.
+            print(
+                f"Test {label} ({parameters['description']}) - "
+                + context.colored("could not be run", "red")
+                + " because its directory could not be prepared: "
+                + context.colored(str(e), "red"),
+                flush=True,
+                file=out,
+            )
+            return TestOutcome(-1, out.getvalue())
         if debug > 1:
             print(f"Test {label}: running in {test_dir}", file=sys.stderr)
 
@@ -1167,6 +1252,11 @@ def print_expected_output(
             test.parameters["max_file_size_bytes"] = 1000000000
             test.parameters["max_real_seconds"] = 0
             test.parameters["max_cpu_seconds"] = 0
+            # max_rss_bytes belongs with the rest: it did nothing until this
+            # branch made it real, and a 1GB default kills the generation of
+            # expected output for any exercise that needs more -- every MIPS
+            # game among them
+            test.parameters["max_rss_bytes"] = 0
             # override dcc output checking
             finalize_dcc_output_checking("dcc_output_checking", False, test.parameters)
 

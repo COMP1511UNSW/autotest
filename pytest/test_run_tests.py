@@ -433,6 +433,42 @@ def test_generate_expected_output_prints_the_specification_with_outputs(
         assert f.read() == GENERATE_SPEC
 
 
+HUNGRY_SH = (
+    "#!/bin/sh\n"
+    "exec python3 -c '\n"
+    "import time\n"
+    "b = bytearray(64 * 1024 * 1024)\n"
+    "time.sleep(1)\n"
+    "print(len(b))\n"
+    "'\n"
+)
+
+
+def test_generate_expected_output_ignores_the_memory_limit(
+    tmp_path, make_exercise, run_autotest
+):
+    """
+    -g lifts every resource limit, max_rss_bytes included.
+
+    It always lifted the others.  max_rss_bytes did nothing until this branch
+    made it real, so leaving it out went unnoticed: with a 1GB default in
+    place it kills the generation of expected output for any exercise that
+    needs more than the limit, which is every MIPS game.
+
+    The program holds its memory for a second, because the supervisor samples
+    on a timer and a quick allocation is gone before it looks.
+    """
+    spec = (
+        "files=a.sh\nprogram=./a.sh\nmax_rss_bytes=8000000\nmax_real_seconds=30\n"
+        '1 command="./a.sh"\n'
+    )
+    exercise = make_exercise(tmp_path, spec, files={"a.sh": HUNGRY_SH})
+    stdout, stderr, status = run_autotest(exercise.args + ["-g", "outputs_only"])
+    assert status == 0, stdout + stderr
+    assert "67108864" in stdout, stdout + stderr
+    assert "memory limit" not in stdout + stderr, stdout + stderr
+
+
 def test_generate_expected_output_other_value_prints_only_the_outputs(
     tmp_path, make_exercise, run_autotest
 ):
@@ -514,6 +550,79 @@ def test_a_test_can_inspect_a_file_it_is_not_allowed_to_read(run_autotest, tmp_p
     )
     assert "1 tests passed 0 tests failed" in stdout, stdout
     assert status == 0
+
+
+def test_an_unreadable_file_keeps_its_mode_when_tests_run_in_parallel(
+    run_autotest, tmp_path
+):
+    """
+    Copying an unreadable file must not show another test a widened mode.
+
+    copy_readable adds the read bit to the file in the SHARED directory to
+    copy it, and that file is one every other worker is copying at the same
+    time.  Without a lock a worker copying during that window takes the
+    widened mode, and a test which inspects file permissions -- COMP1521's
+    file_modes, the exercise copy_readable exists for -- is marked on it.
+
+    Sixteen tests against one unreadable file, run on four threads: every one
+    of them must see mode 223.
+    """
+    spec = tmp_path / "spec"
+    spec.mkdir()
+    tests = "".join(f'{n} expected_stdout="--w--w--wx\\n"\n' for n in range(1, 17))
+    (spec / "tests.txt").write_text(
+        "files=show.sh\n"
+        "program=./show.sh\n"
+        'pre_compile_command="chmod 223 unreadable >unreadable"\n'
+        "pre_compile_command_shell=1\n" + tests
+    )
+    submission = tmp_path / "sub"
+    submission.mkdir()
+    show = submission / "show.sh"
+    show.write_text('#!/bin/sh\nls -l unreadable | cut -d" " -f1\n')
+    show.chmod(0o700)
+
+    stdout, _stderr, status = run_autotest(
+        ["-D", str(submission), "-a", str(spec), "--no_sandbox", "-j", "4"]
+    )
+    assert "16 tests passed 0 tests failed" in stdout, stdout
+    assert status == 0
+
+
+def test_a_directory_that_can_not_be_copied_stops_the_test(run_autotest, tmp_path):
+    """
+    A test whose directory could not be prepared is not run.
+
+    It used to print a warning to stderr and run anyway, against a directory
+    missing some of its files -- which can fail, or pass, a student for a
+    reason that has nothing to do with their submission, and stderr is not
+    where either of them looks for the result.
+
+    A pre_compile_command which leaves a directory nothing can read is the
+    cheapest real way to break the copy.
+    """
+    spec = tmp_path / "spec"
+    spec.mkdir()
+    (spec / "tests.txt").write_text(
+        "files=show.sh\n"
+        "program=./show.sh\n"
+        'pre_compile_command="mkdir -p locked && chmod 000 locked"\n'
+        "pre_compile_command_shell=1\n"
+        '1 command="true" expected_stdout=""\n'
+    )
+    submission = tmp_path / "sub"
+    submission.mkdir()
+    show = submission / "show.sh"
+    show.write_text("#!/bin/sh\n")
+    show.chmod(0o700)
+
+    stdout, _stderr, status = run_autotest(
+        ["-D", str(submission), "-a", str(spec), "--no_sandbox"]
+    )
+    assert "could not be run" in stdout, stdout
+    assert "could not be prepared" in stdout, stdout
+    assert "0 tests passed" in stdout, stdout
+    assert status != 0
 
 
 def test_each_test_gets_its_own_pre_compile_command(run_autotest, tmp_path):
