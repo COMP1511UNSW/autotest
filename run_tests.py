@@ -219,7 +219,9 @@ class RunContext:
 
         if unlink:
             unlink_path = os.path.join(work_dir, unlink)
-            if os.path.exists(unlink_path) and os.path.islink(unlink_path):
+            # islink alone: os.path.exists follows the link, so it is False
+            # for a dangling one, which is the link that most needs removing
+            if os.path.islink(unlink_path):
                 if self.debug > 1:
                     print("run_support_command unlinking: ", unlink_path)
                 os.unlink(unlink_path)
@@ -347,9 +349,9 @@ def run_legacy_hooks(context: RunContext) -> Optional[int]:
     return None
 
 
-def preparation_is_per_test(tests_to_run: list[_Test]) -> bool:
+def preparation_prefixes(tests_to_run: list[_Test]) -> Optional[list[list[Any]]]:
     """
-    Must each test prepare in its own directory rather than the shared one?
+    Where must each test prepare, and what has to have been run there first?
 
     Preparing once in the shared directory is what lets many tests share a
     compilation, but it is wrong when the preparation differs between tests
@@ -358,16 +360,36 @@ def preparation_is_per_test(tests_to_run: list[_Test]) -> bool:
     different contents to the same temp.s, so whichever ran last decided what
     both tests saw and one of them failed.
 
-    Only pre_compile_command is considered.  Checkers and compilers are keyed
-    by their command line and produce the same result wherever they run, and
-    every specification with per-test pre_compile_commands in the COMP1511,
-    COMP1521 and COMP2041 material is interpreted rather than compiled, so
-    nothing is losing a shared compilation here.
+    Return None when every test can share one preparation.  Otherwise return,
+    for each test in order, the pre_compile_commands that a serial run would
+    already have run in the directory before this test's own runs.  A serial
+    run executes each distinct pre_compile_command once, when the first test
+    using it is reached, so the state a test sees is the submission plus every
+    distinct command up to and including its own, applied in that order --
+    and a specification may depend on exactly that.  COMP1511's cs_chardle
+    does: ten tests run "cp cs_chardle.c modified.c && sed ... modified.c",
+    and the eleventh runs "sed ... modified.c" alone, which has nothing to
+    edit unless the earlier command has already made the file.
     """
-    commands = {
-        str(test.parameters.get("pre_compile_command")) for test in tests_to_run
-    }
-    return len(commands) > 1
+    distinct: list[Any] = []
+    position: dict[str, int] = {}
+    for test in tests_to_run:
+        command = test.parameters.get("pre_compile_command")
+        if str(command) not in position:
+            position[str(command)] = len(distinct)
+            distinct.append(command)
+    if len(distinct) < 2:
+        return None
+    return [
+        [
+            command
+            for command in distinct[
+                : position[str(test.parameters["pre_compile_command"])]
+            ]
+            if command
+        ]
+        for test in tests_to_run
+    ]
 
 
 def run_tests_concurrently(context: RunContext, tests_to_run: list[_Test]) -> list[int]:
@@ -377,15 +399,17 @@ def run_tests_concurrently(context: RunContext, tests_to_run: list[_Test]) -> li
     """
     # phase 1: checkers and compilation, serially in the shared directory,
     # unless each test has to prepare in its own copy
-    per_test = preparation_is_per_test(tests_to_run)
-    prepared: list[tuple[_Test, list[str], io.StringIO, Optional[TestOutcome]]] = []
-    for test in tests_to_run:
+    prefixes = preparation_prefixes(tests_to_run)
+    prepared: list[
+        tuple[_Test, list[str], io.StringIO, Optional[TestOutcome], Optional[list[Any]]]
+    ] = []
+    for index, test in enumerate(tests_to_run):
         out = io.StringIO()
-        if per_test:
-            prepared.append((test, [], out, None))
+        if prefixes is not None:
+            prepared.append((test, [], out, None, prefixes[index]))
             continue
         test_files, outcome = prepare_test(context, test, out)
-        prepared.append((test, test_files, out, outcome))
+        prepared.append((test, test_files, out, outcome, None))
 
     # phase 2: each test in its own directory, on a worker thread
     # tests sharing one directory would overwrite each other's files, so that
@@ -398,13 +422,13 @@ def run_tests_concurrently(context: RunContext, tests_to_run: list[_Test]) -> li
     results = []
     try:
         pending: list[tuple[_Test, Any]] = []
-        for test, test_files, out, outcome in prepared:
+        for test, test_files, out, outcome, prefix in prepared:
             if outcome is None:
                 pending.append(
                     (
                         test,
                         executor.submit(
-                            execute_test, context, test, test_files, out, per_test
+                            execute_test, context, test, test_files, out, prefix
                         ),
                     )
                 )
@@ -449,7 +473,7 @@ def prepare_test(
 
     directory is where they run, defaulting to the shared directory.  A test
     whose pre_compile_command is its own prepares in its own copy instead: see
-    preparation_is_per_test().
+    preparation_prefixes().
 
     return (the test's files, a TestOutcome iff the test can not be run)
     """
@@ -496,12 +520,23 @@ def prepare_test(
         )
         return (test_files, TestOutcome(-1, out.getvalue()))
 
-    chmod_program(context, parameters["program"])
+    chmod_program(context, parameters["program"], directory)
 
     # Leave the shared directory as a serial run left it after this test
     # ran: with the program linked to the (last) compiled binary.  Later
     # tests' checks that their files exist, and whether their compilations
     # are needed at all, depend on that link being there.
+    #
+    # Only when this is the shared directory.  Linking there on behalf of a
+    # test that compiled somewhere else leaves a symlink to a binary the
+    # shared directory does not have, every later test copies it, and a
+    # compiler writing to the program name then writes through it and builds
+    # the wrong file: that cost COMP1511's my_scanf and count_farnarkles a
+    # test each.  execute_test links in the test's own directory instead.
+    if directory != context.shared_dir:
+        print(description, end="", file=out)
+        return (test_files, None)
+
     for compile_command in parameters["compile_commands"] or []:
         if compile_command:
             link_program(
@@ -587,15 +622,17 @@ def execute_test(  # noqa: C901, PLR0912, PLR0915 - one branch per stage of runn
     test: _Test,
     test_files: list[str],
     out: io.StringIO,
-    prepare_here: bool = False,
+    prepare_prefix: Optional[list[Any]] = None,
 ) -> TestOutcome:
     """
     phase 2 for one test, on a worker thread: copy the shared directory,
     then run setup_command and the test once per compile command in the copy
 
-    With prepare_here the test's checkers, pre_compile_command and compilers
-    run in that copy too, rather than having run once in the shared directory
-    (see preparation_is_per_test).
+    A prepare_prefix that is not None means this test's checkers,
+    pre_compile_command and compilers run in that copy too, rather than
+    having run once in the shared directory, and that the commands it holds
+    must run there first to put the directory in the state a serial run would
+    have left it in (see preparation_prefixes).
     """
     parameters = test.parameters
     debug = context.debug
@@ -637,7 +674,17 @@ def execute_test(  # noqa: C901, PLR0912, PLR0915 - one branch per stage of runn
         if debug > 1:
             print(f"Test {label}: running in {test_dir}", file=sys.stderr)
 
-        if prepare_here:
+        if prepare_prefix is not None:
+            for command in prepare_prefix:
+                if not context.run_support_command(
+                    command,
+                    parameters,
+                    test_dir,
+                    out,
+                    print_command=False,
+                    cache=False,
+                ):
+                    break
             test_files, prepare_outcome = prepare_test(context, test, out, test_dir)
             if prepare_outcome is not None:
                 return prepare_outcome
@@ -943,16 +990,25 @@ def get_unique_program_name(
     )
 
 
-def chmod_program(context: RunContext, program: str) -> None:
-    """make program executable (once) in the shared directory"""
-    if program in context.chmod_done:
-        return
+def chmod_program(context: RunContext, program: str, directory: str = "") -> None:
+    """
+    make program executable in directory, which defaults to the shared one
+
+    The shared directory is done once; a test's own copy is done every time,
+    because it is a fresh directory that the earlier chmod never reached.
+    """
+    shared = not directory or directory == context.shared_dir
+    if shared:
+        if program in context.chmod_done:
+            return
+        directory = context.shared_dir
     try:
-        os.chmod(os.path.join(context.shared_dir, program), 0o700)
-        context.chmod_done.add(program)
+        os.chmod(os.path.join(directory, program), 0o700)
     except OSError:
         # if program is produced by compilation, it won't exist
-        pass
+        return
+    if shared:
+        context.chmod_done.add(program)
 
 
 def provide_multi_language_support(  # noqa: C901, PLR0911 - one early return per language

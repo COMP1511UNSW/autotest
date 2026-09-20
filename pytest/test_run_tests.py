@@ -550,6 +550,78 @@ def test_each_test_gets_its_own_pre_compile_command(run_autotest, tmp_path):
         assert status == 0
 
 
+def test_a_pre_compile_command_sees_what_the_earlier_ones_left(run_autotest, tmp_path):
+    """
+    A test's pre_compile_command runs after every distinct one before it, as
+    it would in a serial run, so it can build on what they left behind.
+
+    COMP1511's cs_chardle found this: ten tests run
+    "cp cs_chardle.c modified.c && sed ... modified.c" and the eleventh runs
+    "sed ... modified.c" alone, which has nothing to edit unless the earlier
+    command has already made the file.  Giving each test only its own command
+    cost that exercise a test.
+    """
+    spec = tmp_path / "spec"
+    spec.mkdir()
+    (spec / "tests.txt").write_text(
+        "files=show.sh\n"
+        "program=./show.sh\n"
+        'one pre_compile_command="echo made > built.txt"\n'
+        'one command="cat built.txt" expected_stdout="made\\n"\n'
+        'two pre_compile_command="sed -i s/made/edited/ built.txt"\n'
+        'two command="cat built.txt" expected_stdout="edited\\n"\n'
+    )
+    submission = tmp_path / "sub"
+    submission.mkdir()
+    show = submission / "show.sh"
+    show.write_text("#!/bin/sh\n")
+    show.chmod(0o700)
+
+    for extra in ([], ["-j", "4"]):
+        stdout, _stderr, status = run_autotest(
+            ["-D", str(submission), "-a", str(spec), "--no_sandbox", *extra]
+        )
+        assert "2 tests passed 0 tests failed" in stdout, (extra, stdout)
+        assert status == 0
+
+
+def test_per_test_preparation_builds_each_program_in_its_own_directory(
+    run_autotest, tmp_path
+):
+    """
+    Two compile commands producing the same program name still give each test
+    the binary its own command built.
+
+    COMP1511's my_scanf and count_farnarkles found this.  Preparing per test
+    but linking the program in the shared directory left a link there to a
+    binary only the test's own directory had.  The next test copied that
+    dangling link, its compiler wrote through it -- building the previous
+    test's file name -- and the link it was then given pointed at nothing.
+    """
+    spec = tmp_path / "spec"
+    spec.mkdir()
+    (spec / "tests.txt").write_text(
+        "files=marker.txt\n"
+        "program=prog\n"
+        'one pre_compile_command="true"\n'
+        "one compile_commands=\"sh -c 'echo echo first > prog; chmod 755 prog'\"\n"
+        'one command="./prog" expected_stdout="first\\n"\n'
+        'two pre_compile_command="true # differs, so each test prepares alone"\n'
+        "two compile_commands=\"sh -c 'echo echo second > prog; chmod 755 prog'\"\n"
+        'two command="./prog" expected_stdout="second\\n"\n'
+    )
+    submission = tmp_path / "sub"
+    submission.mkdir()
+    (submission / "marker.txt").write_text("")
+
+    for extra in ([], ["-j", "4"]):
+        stdout, _stderr, status = run_autotest(
+            ["-D", str(submission), "-a", str(spec), "--no_sandbox", *extra]
+        )
+        assert "2 tests passed 0 tests failed" in stdout, (extra, stdout)
+        assert status == 0
+
+
 def test_one_pre_compile_command_shared_by_every_test_runs_once(run_autotest, tmp_path):
     """The shared case keeps preparing once, which is what lets tests share a
     compilation."""

@@ -121,7 +121,10 @@ run_one() {
 	name=$(basename "$activity")
 	run="$work/$(basename "$outdir")-$name"
 	mkdir -p "$run/submission" || return 0
-	cp -a "$activity"/solutions/. "$run/submission"/ 2>/dev/null
+	# -L: a course shares one solution between activities with a relative
+	# symbolic link, which dangles once copied out of the materials tree.  A
+	# student's directory holds the file itself, so the copy should too.
+	cp -aL "$activity"/solutions/. "$run/submission"/ 2>/dev/null
 
 	output=$(cd "$run/submission" && TMPDIR="$run" timeout -k 5 300 \
 		"$python" "$tree/autotest.py" \
