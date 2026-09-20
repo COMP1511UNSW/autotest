@@ -1279,6 +1279,22 @@ def finalize_sandbox(_name, value, _parameters):
     return value_to_bool(value)
 
 
+def finalize_stability_runs(name, value, _parameters):
+    """
+    Turn stability_runs into an integer of at least 1.
+
+    0 and negative values mean "off" rather than "no runs at all", which is
+    what a spec author writing stability_runs=0 to disable it means.
+    """
+    try:
+        count = int(value)
+    except (TypeError, ValueError) as e:
+        raise TestSpecificationError(
+            f"invalid value for parameter '{name}': {value}"
+        ) from e
+    return max(1, count)
+
+
 def finalize_parallel_tests(name, value, _parameters):
     """
     Turn parallel_tests into a positive integer.
@@ -1429,6 +1445,28 @@ PARAMETER_LIST += [
         show_in_documentation=False,
         description="""
             Deprecated: ignored
+        """,
+    ),
+    Parameter(
+        "stability_runs",
+        default=1,
+        finalize=finalize_stability_runs,
+        description="""
+            If greater than 1, each test is run this many times, each in a
+            fresh copy of the test directory, and any test which does not
+            reach the same result every time is reported as **`unstable`**
+            rather than passed or failed.<br>
+            The command-line option is **`--check_stability`**.<br>
+            This is a staff check for specifications, not something to leave
+            on: it multiplies the time a run takes.<br>
+            Two runs are compared on the verdict and on the explanation of a
+            failure, with hexadecimal constants removed, so an address printed
+            by dcc or valgrind does not make every test look unstable.  A
+            decimal value which varies between runs -- a pid, a timestamp, an
+            elapsed time -- in the output of a test which *fails* is part of
+            its explanation and will be reported.<br>
+            A test with **`shared_test_directory`** is not repeated: a second
+            run would see what the first left in that directory.
         """,
     ),
     Parameter(

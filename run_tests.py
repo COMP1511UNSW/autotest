@@ -94,6 +94,8 @@ class TestOutcome:
         self.test_dir: Optional[str] = None
         # what the test cost, when report_resource_usage asked: see --stats
         self.resource_usage: Any = None
+        # set by execute_test when a repeat reached a different result
+        self.unstable: Optional[str] = None
 
 
 class RunContext:
@@ -152,6 +154,8 @@ class RunContext:
         # hex-stripped long explanation -> label of the first test which
         # produced it, for "failed (X - same as Test Y)"
         self.previous_errors: dict[str, str] = {}
+        # labels whose repeats disagreed: see execute_test and --check_stability
+        self.unstable_labels: list[str] = []
         # set by detect_unreadable_files() before any worker starts, and
         # left False for a serial run, which cannot race with itself
         self._shared_dir_has_unreadable_file: bool = False
@@ -347,7 +351,7 @@ def support_command_text(output: bytes) -> str:
     return re.sub("\r\n?", "\n", output.decode("utf-8", errors="replace"))
 
 
-def run_tests(
+def run_tests(  # noqa: C901 - one branch per thing a run can report: missing files, unstable tests, resource usage, the counts
     tests: dict[str, _Test],
     global_parameters: dict[str, Any],
     args: Namespace,
@@ -381,6 +385,17 @@ def run_tests(
         return 1
 
     results = run_tests_concurrently(context, tests_to_run)
+
+    if context.unstable_labels:
+        print(
+            colored(
+                f"{len(context.unstable_labels)} tests did not reach the same"
+                " result every time:",
+                "red",
+            ),
+            " ".join(context.unstable_labels),
+            file=file,
+        )
 
     if context.parameters.get("report_resource_usage"):
         print_resource_usage(context, tests_to_run)
@@ -800,7 +815,93 @@ def copy_readable(source: str, destination: str) -> None:
             os.chmod(destination, mode)
 
 
-def execute_test(  # noqa: C901, PLR0912, PLR0915 - one branch per stage of running one test
+def execute_test(
+    context: RunContext,
+    test: _Test,
+    test_files: list[str],
+    out: io.StringIO,
+    prepare_prefix: Optional[list[Any]] = None,
+) -> TestOutcome:
+    """
+    phase 2 for one test: run it, and with stability_runs > 1 run it again
+    until a repeat reaches a different result
+
+    The first run's outcome is what is returned and reported, so ordering,
+    output and the per-test directory lifecycle are exactly as they are
+    without the check; a repeat that disagrees only sets outcome.unstable.
+
+    COMP1521's dining_philosophers and 24t1final_q7 reach a different result
+    between two runs against the same model solution, so students are partly
+    marked on a coin flip and nothing said so.
+    """
+    outcome = execute_test_once(context, test, test_files, out, prepare_prefix)
+
+    runs = int(test.parameters.get("stability_runs", 1) or 1)
+    # A test sharing the one directory can not be repeated: run 2 would see
+    # what run 1 left there, and the repeats would write to the directory
+    # every other worker is copying from.  own_directory is decided from the
+    # test's own parameters in execute_test_once, so it is decided here too.
+    if runs < 2 or test.parameters.get("shared_test_directory"):
+        return outcome
+
+    # Nothing needs run 1's directory once its outcome is built, and leaving
+    # it until the main thread removes it would put two copies of the
+    # submission on disk per worker for the length of the repeats.
+    remove_test_directory(context, outcome)
+
+    # Running a test mutates the parameters every later run shares:
+    # get_long_explanation sets show_diff False once it has reported one
+    # difference, so a repeat of a test whose output holds a control
+    # character would produce a shorter explanation from identical bytes and
+    # be called unstable.
+    before = dict(test.parameters)
+    first = result_signature(outcome)
+    for run in range(2, runs + 1):
+        test.parameters.clear()
+        test.parameters.update(before)
+        repeat_out = io.StringIO()
+        repeat = execute_test_once(
+            context, test, test_files, repeat_out, prepare_prefix
+        )
+        remove_test_directory(context, repeat)
+        if result_signature(repeat) != first:
+            outcome.unstable = (
+                f"run 1 {verdict_word(outcome)}, run {run} {verdict_word(repeat)}"
+            )
+            break
+    test.parameters.clear()
+    test.parameters.update(before)
+    return outcome
+
+
+def verdict_word(outcome: TestOutcome) -> str:
+    """how a run came out, for the unstable message"""
+    if outcome.status == 1:
+        return "passed"
+    if outcome.status == 0:
+        return f"failed ({outcome.short_explanation})"
+    return "could not be run"
+
+
+def result_signature(outcome: TestOutcome) -> tuple[int, Optional[str], str]:
+    """
+    What a student is marked on, for comparing two runs of one test.
+
+    Hexadecimal constants are removed from the explanation, as report_outcome
+    already does for "same as Test X", so a dcc or valgrind address does not
+    make every test look unstable.  A decimal value that varies -- a pid, a
+    timestamp, an elapsed time -- in the output of a test that FAILS is part
+    of its explanation and will be reported; that is a specification worth
+    looking at rather than a false positive.
+    """
+    return (
+        outcome.status,
+        outcome.short_explanation,
+        re.sub(r"0x[0-9a-f]+", "", outcome.long_explanation, flags=re.IGNORECASE),
+    )
+
+
+def execute_test_once(  # noqa: C901, PLR0912, PLR0915 - one branch per stage of running one test
     context: RunContext,
     test: _Test,
     test_files: list[str],
@@ -1016,6 +1117,20 @@ def report_outcome(context: RunContext, test: _Test, outcome: TestOutcome) -> in
     test.stdout = outcome.stdout
     test.stderr = outcome.stderr
     test.resource_usage = outcome.resource_usage
+    if outcome.unstable:
+        # neither a pass nor a fail: the specification does not decide the
+        # same way twice, which is a defect in the test, not in the
+        # submission
+        context.unstable_labels.append(str(test.parameters["label"]))
+        print(
+            colored("unstable", "red"),
+            f"({outcome.unstable})",
+            flush=True,
+            file=file,
+        )
+        if outcome.long_explanation:
+            print(outcome.long_explanation, flush=True, file=file, end="")
+        return 0
     if outcome.status == 1:
         print(colored("passed", "green"), flush=True, file=file)
         return 1

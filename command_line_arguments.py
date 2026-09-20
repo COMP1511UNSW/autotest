@@ -48,7 +48,7 @@ def process_arguments():
     return args, tests, parameters
 
 
-def parse_arguments():  # noqa: PLR0915 - one statement per command-line option
+def parse_arguments():  # noqa: C901, PLR0915 - one branch and one statement per command-line option
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter, epilog=EXTRA_HELP
     )
@@ -104,6 +104,14 @@ def parse_arguments():  # noqa: PLR0915 - one statement per command-line option
         type=int,
         metavar="N",
         help="run N tests concurrently (sets parameter parallel_tests, 0 = one per CPU)",
+    )
+    parser.add_argument(
+        "--check_stability",
+        nargs="?",
+        type=int,
+        const=2,
+        metavar="N",
+        help="run each test N times (default 2) and report any test whose result is not the same every time (sets parameter stability_runs)",
     )
     parser.add_argument(
         "--stats",
@@ -171,6 +179,8 @@ def parse_arguments():  # noqa: PLR0915 - one statement per command-line option
         args.initial_parameters["sandbox"] = False
     if args.stats:
         args.initial_parameters["report_resource_usage"] = True
+    if args.check_stability is not None:
+        args.initial_parameters["stability_runs"] = args.check_stability
 
     if args.debug:
         print("raw args:", args, file=sys.stderr)

@@ -360,3 +360,105 @@ def test_a_checker_runs_once_however_many_tests_run_at_once(run_autotest, tmp_pa
         assert runs == 1, (extra, runs)
         # and its output is shown once, in one test's block
         assert stdout.count("echo ran") == 1, (extra, stdout)
+
+
+# ---- --check_stability
+
+
+SH = "#!/bin/sh\n"
+
+
+def stability_exercise(tmp_path, tests):
+    spec = tmp_path / "spec"
+    spec.mkdir(exist_ok=True)
+    (spec / "tests.txt").write_text("files=a.sh\nprogram=./a.sh\n" + tests)
+    submission = tmp_path / "sub"
+    submission.mkdir(exist_ok=True)
+    a = submission / "a.sh"
+    a.write_text(SH)
+    a.chmod(0o700)
+    return ["-D", str(submission), "-a", str(spec), "--no_sandbox"]
+
+
+def test_a_test_whose_result_changes_is_reported_as_unstable(run_autotest, tmp_path):
+    """
+    COMP1521's dining_philosophers and 24t1final_q7 reach a different result
+    between two runs against the same model solution. Students are partly
+    marked on a coin flip and nothing said so.
+
+    The counter lives outside the test directory, which is a fresh copy for
+    every run, so the second run behaves differently from the first.
+    """
+    counter = tmp_path / "counter"
+    args = stability_exercise(
+        tmp_path,
+        f"""1 command="sh -c 'printf x >>{counter}; printf %s $(wc -c <{counter})'" expected_stdout="1"\n""",
+    )
+    stdout, _stderr, status = run_autotest(args + ["--check_stability"])
+    assert "unstable" in stdout, stdout
+    assert "did not reach the same result every time" in stdout, stdout
+    assert status != 0
+
+
+def test_a_steady_test_is_not_reported_as_unstable(run_autotest, tmp_path):
+    """Both a steady pass and a steady failure are steady."""
+    args = stability_exercise(
+        tmp_path,
+        'good command="echo hi" expected_stdout="hi\\n"\n'
+        'bad command="echo bye" expected_stdout="hi\\n"\n',
+    )
+    stdout, _stderr, _status = run_autotest(args + ["--check_stability", "4"])
+    assert "unstable" not in stdout, stdout
+    assert "1 tests passed 1 tests failed" in stdout, stdout
+
+
+def test_a_failing_test_is_not_called_unstable_by_its_own_explanation(
+    run_autotest, tmp_path
+):
+    """
+    Running a test mutates the parameters every later run shares.
+
+    get_long_explanation sets show_diff False once it has reported a
+    difference, and show_diff is read back out of the same dictionary. A
+    repeat of a test whose output holds a control character would then
+    produce a shorter explanation from identical bytes and be called
+    unstable. Each run has to see what the first one saw.
+    """
+    args = stability_exercise(
+        tmp_path,
+        '1 command="printf \'ab\\\\007cd\\\\n\'" expected_stdout="nope\\n"\n',
+    )
+    stdout, _stderr, _status = run_autotest(args + ["--check_stability", "3"])
+    assert "unstable" not in stdout, stdout
+    assert "0 tests passed 1 tests failed" in stdout, stdout
+
+
+def test_repeats_do_not_leave_a_second_test_directory_behind(run_autotest, tmp_path):
+    """
+    Two copies of the submission per worker is the failure mode that took a
+    30GB machine down, so a repeat starts only once its predecessor is gone.
+    """
+    args = stability_exercise(
+        tmp_path,
+        '1 command="sh -c \'ls -a .. | grep -c \\"^[.]test-\\"\'"'
+        ' expected_stdout="1\\n"\n',
+    )
+    stdout, _stderr, status = run_autotest(args + ["--check_stability", "4"])
+    assert "unstable" not in stdout, stdout
+    assert status == 0, stdout
+
+
+def test_a_shared_test_directory_is_not_repeated(run_autotest, tmp_path):
+    """
+    A second run would see what the first left in the one directory, and
+    would write to the directory every other test is using.
+    """
+    args = stability_exercise(
+        tmp_path,
+        "shared_test_directory=1\n"
+        "1 command=\"sh -c 'printf x >>counted; wc -c <counted'\""
+        ' expected_stdout="1\\n"\n',
+    )
+    stdout, _stderr, status = run_autotest(args + ["--check_stability", "5"])
+    assert "unstable" not in stdout, stdout
+    assert status == 0, stdout
