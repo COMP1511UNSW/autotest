@@ -11,3 +11,7 @@ core
 
 # don't accidentally add random test files to repo
 /*.c
+.ruff_cache
+.pytest_cache
+.coverage
+.coverage.*

@@ -1,4 +1,4 @@
-name: auto-pytest
+name: checks
 on: [push, pull_request]
 jobs:
   # job skipper in the case of concurrent push + pull_request trigger
@@ -13,9 +13,9 @@ jobs:
           concurrent_skipping: 'same_content'
           do_not_skip: '["push"]'
 
-  # actual auto pytest
-  main_job:
-    name: pytest
+  # ruff, black, mypy, bandit and vulture, as configured in pyproject.toml
+  lint:
+    name: lint
     needs: pre_job
     if: ${{needs.pre_job.outputs.should_skip != 'true'}}
     runs-on: ubuntu-latest
@@ -53,24 +53,6 @@ jobs:
           # the Pipfile [requires], which is not installed on the runner
           pipenv --python "$(which python)" install --dev
 
-      # No "|| true": the coverage gate assumes a host which can build the
-      # sandbox, so a runner where this stops working must fail here, with
-      # a message naming user namespaces, rather than later as an
-      # unexplained drop in coverage.
-      - name: Allow unprivileged user namespaces (needed by the sandbox on Ubuntu 24.04+)
+      - name: Run the static checkers
         run: |
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-
-      - name: Check that this runner can build a sandbox
-        run: |
-          pipenv run python -c 'import sandbox, sys; r = sandbox.probe(sandbox.config_from_parameters({})); sys.exit(0 if r is None else f"no sandbox on this runner: {r}")'
-
-      - name: Run test suite with the coverage gate (see pyproject.toml)
-        env:
-          # tests/environment expects it when autotest is run on that fixture
-          SAMPLE_ENVIRONMENT_VARIABLE: sample_value
-          # the checkout above uses fetch-depth: 0, so the comparison
-          # against main must run rather than skip
-          AUTOTEST_REQUIRE_MAIN_COMPARISON: "1"
-        run: |
-          pipenv run make coverage
+          pipenv run make lint

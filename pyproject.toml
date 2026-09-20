@@ -1,0 +1,305 @@
+# Tool configuration for autotest.
+#
+# autotest is not packaged (it installs as a directory of flat modules), so
+# this file carries only the settings of the static checkers and the test
+# runner.  Every rule family that catches real bugs or security problems is
+# enabled and passes on the whole tree; where a rule would demand a rewrite
+# of a legacy function it is waived on that function's own def line, not for
+# the whole file, so the rule still applies to everything else in it.
+# An inline suppression always names the rule and says why, at the line it
+# applies to.
+#
+# The program must keep running on Python 3.9, so the target versions here
+# stop the checkers from suggesting newer syntax.
+
+# ---------------------------------------------------------------- black
+
+[tool.black]
+line-length = 88
+# pinned so that black never emits syntax newer than the program supports
+target-version = ["py39"]
+
+# ---------------------------------------------------------------- ruff
+
+[tool.ruff]
+# the tree is formatted by black at its default width; ruff must not fight it
+line-length = 88
+target-version = "py39"
+# tests/ holds the fixture exercises autotest is run against (student
+# programs and tests.txt files), not code of this project
+extend-exclude = ["tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "B",        # bugbear
+    "S",        # flake8-bandit
+    "C4",       # comprehensions
+    "C90",      # mccabe complexity
+    "PIE", "RET", "SIM", "ARG",
+    "ERA",      # commented-out code
+    "PL",       # the pylint rules ruff implements
+    "RUF",
+    "UP",       # pyupgrade (bounded by target-version)
+    "N",        # naming
+    "A",        # builtin shadowing
+    "ISC", "ICN", "G", "INP", "T20", "Q", "SLF", "TID",
+    "PERF", "FURB", "FLY",
+    "BLE",      # blind except
+    "TRY",      # exception handling
+    "PGH",      # blanket noqa / type: ignore
+    "RSE", "YTT", "EXE", "LOG", "DTZ",
+    # FA102 alone (not the FA family): "X | Y" in an annotation is a
+    # TypeError at import time on 3.9 unless the module has
+    # "from __future__ import annotations", and nothing else in the
+    # toolchain can catch it - mypy has to be told python_version = 3.10
+    # (see below) and CI builds 3.11.  FA100 is not selected: it fires on
+    # every existing Optional[...]/Union[...] and is style only.
+    "FA102",
+    # flake8-pytest-style: the 19 test modules are a third of the tree and
+    # nothing else checks them.  PT011/PT012 (a raises() too broad or with
+    # too much inside it), PT015 (assert False), PT022 (a fixture which
+    # yields nothing) are the ones that catch a test which does not test
+    # what it looks like it tests.
+    "PT",
+]
+ignore = [
+    # black wraps every line it can; what it leaves over its width is a
+    # string or a comment, and the strings a novice sees must stay
+    # byte-for-byte as they are, so this rule could only cause churn
+    "E501",
+    # print() is the user interface: autotest talks to the student on stdout
+    # and stderr, and the debug output uses pprint
+    "T201", "T203",
+    # the comparisons against literal thresholds (8 characters, 1000 lines,
+    # 32 input lines, exit status 125 ...) are the documented behaviour;
+    # naming each would not catch a bug
+    "PLR2004",
+    # explain_output_differences() takes 14 arguments and run() 18
+    # keyword-only ones mirroring tests.txt: the signatures are the module
+    # interfaces, so these two are pure churn.  The other complexity rules
+    # (PLR0911/0912/0915, C901) stay on and are waived per function.
+    "PLR0913", "PLR0917",
+    # running subprocesses is the program's purpose, with command lines
+    # from the trusted test specification; the shell=True checks (S602,
+    # S605) stay enabled
+    "S603", "S607",
+    # every exception message is composed at the raise site because the
+    # message is what the student or tutor reads; there are no
+    # per-message exception classes to move them into
+    "TRY003",
+    # lazy imports are deliberate: requests and the sandbox module are
+    # optional (autotest must run without them), and the interrupt handler
+    # is installed before the slow imports; each site has a comment
+    "PLC0415",
+    # the flat top-level modules are imported by name after the program's
+    # directory is put on sys.path; there is no package
+    "INP001",
+    # reassigning a loop variable to its transformed value ("line = ...")
+    # is the idiom of the legacy parsers and explanation code; renaming
+    # 19 sites would catch nothing
+    "PLW2901",
+    # try/except/pass is used deliberately where an OSError is the
+    # expected way to learn something is missing; contextlib.suppress
+    # would also allocate a context manager in the forked sandbox child
+    "SIM105",
+    # [a] + b and [a, *b] are equivalent; the concatenation spelling is
+    # used consistently
+    "RUF005",
+    # the loops with try/except inside are sequences of system calls whose
+    # failure is per iteration (dropping each capability, copying each
+    # file); hoisting the try would change which iterations continue
+    "PERF203",
+    # preexec_fn is the sandbox mechanism: the child must unshare, mount
+    # and pivot before it execs.  What runs there is written for the forked
+    # child of a threaded parent: no imports, no locks, everything it needs
+    # prepared in the parent (see sandbox.py)
+    "PLW1509",
+    # parametrize("a, b", ...) and parametrize(["a", "b"], ...) are the
+    # same thing to pytest; the comma spelling is used throughout and
+    # rewriting 23 decorators would catch nothing
+    "PT006", "PT007",
+    # "assert a and b" says what the test means where the two halves are
+    # one fact (a type and a sign, a name and its value)
+    "PT018",
+    # pathlib: os.path is used throughout the program and in the tests;
+    # rewriting it would be churn, and a path bug is not what PTH catches
+    # (the sibling vexam project selects PTH, which is why this says so)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The complexity rules (C901, PLR0911, PLR0912, PLR0915) are NOT waived by
+# file.  A legacy function whose complexity is the price of the behaviour
+# it implements carries "# noqa: <rules> - <reason>" on its own def line,
+# so a new complex function anywhere in the same file is still reported.
+#
+# the SIGINT handler is installed before the (slow) imports so that an
+# interrupt during import is handled too, hence imports below code
+"autotest.py" = ["E402"]
+# W291: TEST_STRINGS (the module's self-test data) contains a trailing tab
+# on purpose
+"parse_test_specification.py" = ["W291"]
+# In pytest, assert IS the assertion mechanism (S101 is about asserts being
+# stripped under -O, which is not how tests run) and the literal a test pins
+# is the point (PLR2004).  Tests use /tmp (S108), start subprocesses (S603,
+# S607) and inspect their exit status themselves (PLW1510), reach into the
+# module under test (SLF001), and take fixture or stub arguments they do not
+# use (ARG).
+"pytest/*" = ["S101", "PLR2004", "S108", "S603", "S607", "INP001", "SLF001",
+              "PLW1510", "ARG001", "ARG005"]
+
+[tool.ruff.lint.isort]
+# the repository root is where the flat modules live
+known-first-party = [
+    "autotest", "command_line_arguments", "copy_files_to_temp_directory",
+    "explain_output_differences", "helper", "parameter_descriptions",
+    "parse_test_specification", "run_test", "run_tests", "sandbox",
+    "sandbox_landlock", "sandbox_seccomp", "subprocess_with_resource_limits",
+    "upload_results", "util",
+]
+
+# ---------------------------------------------------------------- mypy
+
+[tool.mypy]
+# the code stays 3.9-compatible, but current mypy refuses python_version < 3.10
+python_version = "3.10"
+# tests/ holds fixture exercises, not this project's code
+exclude = ["^tests/"]
+# pytest/ is on the path so that the test modules' "import conftest" (the
+# shared helpers, as pytest itself resolves it) is followed rather than
+# reported as missing
+mypy_path = ["pytest"]
+namespace_packages = true
+explicit_package_bases = true
+warn_return_any = true
+warn_unused_configs = true
+warn_unreachable = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_implicit_optional = true
+strict_equality = true
+check_untyped_defs = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+
+# The sandbox and the process runner are the security boundary: everything
+# in them is annotated and checked at mypy's strictest.  (Written out as the
+# individual flags because a per-module "strict = true" is applied globally.)
+[[tool.mypy.overrides]]
+module = [
+    "sandbox",
+    "sandbox_seccomp",
+    "sandbox_landlock",
+    "subprocess_with_resource_limits",
+]
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_decorators = true
+no_implicit_reexport = true
+extra_checks = true
+
+# The legacy modules are checked (check_untyped_defs) but not required to
+# be annotated: their functions take and return the loosely typed parameter
+# dictionaries of tests.txt.
+[[tool.mypy.overrides]]
+module = [
+    "autotest",
+    "command_line_arguments",
+    "copy_files_to_temp_directory",
+    "explain_output_differences",
+    "helper",
+    "parameter_descriptions",
+    "parse_test_specification",
+    "run_test",
+    "run_tests",
+    "upload_results",
+    "util",
+    "pytest.*",
+]
+disallow_untyped_defs = false
+
+# ---------------------------------------------------------------- bandit
+
+[tool.bandit]
+# pytest/ has its own security rules through ruff's S family; tests/ holds
+# the fixture exercises
+exclude_dirs = ["tests", "pytest", ".git", ".mypy_cache", ".ruff_cache"]
+skips = [
+    # running subprocesses is the program's purpose: the command lines come
+    # from the trusted test specification (see README "Security model") and
+    # the student's program runs in the sandbox
+    "B404",  # import subprocess
+    "B603",  # subprocess call without shell=True
+]
+
+# ---------------------------------------------------------------- vulture
+
+[tool.vulture]
+paths = ["."]
+# pytest/ is excluded because vulture cannot see that pytest calls a
+# fixture, a hook (pytest_configure, pytest_runtest_setup) or a handler
+# method: at 60 it reports 14 of them and nothing real.  The tests' own
+# dead code is caught by ruff's F401/F811/F841.
+exclude = ["pytest/", "tests/", "examples/", "scripts/"]
+# 60, not 80: an unused function, class or method is a 60% finding, so at
+# 80 vulture has nothing it can report on this tree and the step can never
+# fail.  (80's categories - unused imports and variables - are already
+# covered by ruff F401 and F841.)
+min_confidence = 60
+# The kernel ABI bit tables are written out in full so the flags a call
+# does pass can be read against the ones it does not; an unused constant
+# there is documentation, not dead code.
+ignore_names = ["MOUNT_ATTR_*", "ACCESS_FS_MAKE_*"]
+
+# ---------------------------------------------------------------- coverage
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = ["pytest/*", "tests/*"]
+# most tests drive ./autotest.py as a subprocess; this makes coverage arm its
+# site-packages hook in every Python child that inherits the environment
+# (pytest-cov 7 no longer measures subprocesses itself).  Programs run by
+# autotest get a filtered environment and stay unmeasured.
+patch = ["subprocess"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+# Code which runs in a forked child that ends with os._exit() or execve()
+# can never be recorded by coverage, however thoroughly it is tested.  Two
+# markers, because the two situations are different and must stay
+# distinguishable:
+#
+#   "# runs only in the sandbox child" - stages A, B and C of sandbox.py
+#   and the helpers they call, which exist only when a sandbox is built.
+#   Nothing in the parent calls them: an exclusion here can be checked by
+#   looking for a caller outside preexec().
+#
+#   "# runs in the forked child before exec" - prepare_child, _Limits.apply
+#   and _set_rlimit in subprocess_with_resource_limits.py, which run for
+#   every command, --no_sandbox included.
+#
+# Each marker sits on the function's def line and names the test which
+# exercises its effect.  They are the only exclusions: "# pragma: no
+# cover" is not used.
+exclude_also = [
+    "# runs only in the sandbox child",
+    "# runs in the forked child before exec",
+]
+# the whole suite measured 94.04% when this was set (rounded down, minus
+# one): raise it as coverage improves, never lower it.  The figure is for a
+# host which can build the sandbox; see the coverage target in the Makefile
+fail_under = 93
+
+# ---------------------------------------------------------------- pytest
+
+[tool.pytest.ini_options]
+testpaths = ["pytest"]
+addopts = "-p no:cacheprovider"
+# a warning is a bug: unclosed files, leaked processes, deprecated APIs
+filterwarnings = ["error"]

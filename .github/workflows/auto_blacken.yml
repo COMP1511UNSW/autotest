@@ -8,7 +8,7 @@ jobs:
       should_skip: ${{steps.skip_check.outputs.should_skip}}
     steps:
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@master
+        uses: fkirc/skip-duplicate-actions@v5.3.1
         with:
           concurrent_skipping: 'same_content'
           do_not_skip: '["push"]'
@@ -20,20 +20,51 @@ jobs:
     if: ${{needs.pre_job.outputs.should_skip != 'true'}}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         if: github.event_name == 'pull_request'
         with:
           fetch-depth: 0
           ref: ${{github.event.pull_request.head.ref}}
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         if: github.event_name == 'push'
         with:
           fetch-depth: 0
-      - name: Check files using the black formatter
-        uses: rickstaa/action-black@v1
-        id: action_black
+      # The same black as "make lint" checks with: the one in Pipfile.lock.
+      # A separately installed black can disagree with it, and then this
+      # job's commit is exactly what the lint job rejects.
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          black_args: "."
+          python-version: "3.11"
+          architecture: x64
+
+      - name: Install pipenv
+        run: |
+          python -m pip install --upgrade pipenv wheel
+
+      - id: cache-pipenv
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/virtualenvs
+          key: ${{runner.os}}-py3.11-pipenv-${{hashFiles('**/Pipfile.lock')}}
+
+      - name: Install dependencies
+        if: steps.cache-pipenv.outputs.cache-hit != 'true'
+        run: |
+          # --python: use the interpreter set up above rather than the one
+          # the Pipfile [requires], which is not installed on the runner
+          pipenv --python "$(which python)" install --dev
+
+      - name: Check files using the black formatter
+        id: action_black
+        run: |
+          pipenv run black .
+          if git diff --quiet; then
+            echo "is_formatted=false" >>"$GITHUB_OUTPUT"
+          else
+            echo "is_formatted=true" >>"$GITHUB_OUTPUT"
+          fi
+
       - name: Create commit on changes
         if: steps.action_black.outputs.is_formatted == 'true'
         run: |
