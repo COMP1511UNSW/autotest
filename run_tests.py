@@ -46,6 +46,7 @@ from util import AutotestException, die
 LOG_FILE_NAME = "autotest.log"
 SANDBOX_ROOT_PREFIX = ".sandbox-root-"
 TEST_DIRECTORY_PREFIX = ".test-"
+_COPY_CHUNK_BYTES = 1 << 20
 
 
 def run_tests_creating_log(tests, parameters, args):
@@ -516,6 +517,44 @@ def prepare_test(
     return (test_files, None)
 
 
+def copy_file_data(source: str, destination: str) -> None:
+    """
+    Copy one file's contents, without filling in the holes of a sparse file.
+
+    COMP1521's file_sizes creates files of 420GB and 1TB with dd seek= and
+    has a test report their sizes.  They occupy almost no disk, but a plain
+    copy reads and writes every byte, so giving each test its own copy of the
+    directory turned a fast test into one that never finished and would have
+    filled the disk.
+
+    The data is found with SEEK_DATA and SEEK_HOLE, so only the parts of the
+    file which hold anything are read.  A filesystem which does not support
+    them reports the whole file as data, which is the plain copy.
+    """
+    with open(source, "rb") as src, open(destination, "wb") as dst:
+        size = os.fstat(src.fileno()).st_size
+        offset = 0
+        while offset < size:
+            try:
+                data = os.lseek(src.fileno(), offset, os.SEEK_DATA)
+            except OSError:
+                break  # nothing but hole from here to the end
+            hole = os.lseek(src.fileno(), data, os.SEEK_HOLE)
+            src.seek(data)
+            dst.seek(data)
+            remaining = hole - data
+            while remaining > 0:
+                chunk = src.read(min(_COPY_CHUNK_BYTES, remaining))
+                if not chunk:
+                    break
+                dst.write(chunk)
+                remaining -= len(chunk)
+            offset = hole
+        # the file may end in a hole, which nothing above writes
+        dst.truncate(size)
+    shutil.copystat(source, destination)
+
+
 def copy_readable(source: str, destination: str) -> None:
     """
     Copy one file into a test's own directory, even if its mode forbids reading.
@@ -527,7 +566,7 @@ def copy_readable(source: str, destination: str) -> None:
     restored on both files afterwards.
     """
     try:
-        shutil.copy2(source, destination)
+        copy_file_data(source, destination)
     except PermissionError:
         pass
     else:
@@ -536,7 +575,7 @@ def copy_readable(source: str, destination: str) -> None:
     mode = os.stat(source).st_mode
     os.chmod(source, mode | stat.S_IRUSR)
     try:
-        shutil.copy2(source, destination)
+        copy_file_data(source, destination)
     finally:
         os.chmod(source, mode)
         if os.path.exists(destination):

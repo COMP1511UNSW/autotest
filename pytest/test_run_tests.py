@@ -573,3 +573,35 @@ def test_one_pre_compile_command_shared_by_every_test_runs_once(run_autotest, tm
     )
     assert "2 tests passed 0 tests failed" in stdout, stdout
     assert status == 0
+
+
+def test_a_sparse_file_is_not_filled_in_when_each_test_is_given_a_copy(
+    run_autotest, tmp_path
+):
+    """
+    COMP1521's file_sizes creates files of 420GB and 1TB with dd seek= and has
+    a test report their sizes.  They occupy almost no disk, but copying them
+    byte by byte into each test's own directory never finished and would have
+    filled it.
+    """
+    spec = tmp_path / "spec"
+    spec.mkdir()
+    (spec / "tests.txt").write_text(
+        "files=show.sh\n"
+        "program=./show.sh\n"
+        'pre_compile_command="dd status=none seek=64G bs=1 count=1 </dev/zero >big"\n'
+        "pre_compile_command_shell=1\n"
+        'one command="stat -c %s big" expected_stdout="68719476737\\n"\n'
+        'two command="stat -c %s big" expected_stdout="68719476737\\n"\n'
+    )
+    submission = tmp_path / "sub"
+    submission.mkdir()
+    show = submission / "show.sh"
+    show.write_text("#!/bin/sh\n")
+    show.chmod(0o700)
+
+    stdout, _stderr, status = run_autotest(
+        ["-D", str(submission), "-a", str(spec), "--no_sandbox"], timeout=120
+    )
+    assert "2 tests passed 0 tests failed" in stdout, stdout
+    assert status == 0
