@@ -514,3 +514,62 @@ def test_a_test_can_inspect_a_file_it_is_not_allowed_to_read(run_autotest, tmp_p
     )
     assert "1 tests passed 0 tests failed" in stdout, stdout
     assert status == 0
+
+
+def test_each_test_gets_its_own_pre_compile_command(run_autotest, tmp_path):
+    """
+    A pre_compile_command which differs between tests writes to that test's
+    own directory, not to one shared by all of them.
+
+    COMP1521's 25t2final_q4 found this: two of its tests have
+    pre_compile_commands which write different contents to the same temp.s.
+    Preparing once in a shared directory let whichever ran last decide what
+    both tests saw, and one of them failed.
+    """
+    spec = tmp_path / "spec"
+    spec.mkdir()
+    (spec / "tests.txt").write_text(
+        "files=show.sh\n"
+        "program=./show.sh\n"
+        'one pre_compile_command="echo first > chosen.txt"\n'
+        'one command="cat chosen.txt" expected_stdout="first\\n"\n'
+        'two pre_compile_command="echo second > chosen.txt"\n'
+        'two command="cat chosen.txt" expected_stdout="second\\n"\n'
+    )
+    submission = tmp_path / "sub"
+    submission.mkdir()
+    show = submission / "show.sh"
+    show.write_text("#!/bin/sh\n")
+    show.chmod(0o700)
+
+    for extra in ([], ["-j", "4"]):
+        stdout, _stderr, status = run_autotest(
+            ["-D", str(submission), "-a", str(spec), "--no_sandbox", *extra]
+        )
+        assert "2 tests passed 0 tests failed" in stdout, (extra, stdout)
+        assert status == 0
+
+
+def test_one_pre_compile_command_shared_by_every_test_runs_once(run_autotest, tmp_path):
+    """The shared case keeps preparing once, which is what lets tests share a
+    compilation."""
+    spec = tmp_path / "spec"
+    spec.mkdir()
+    (spec / "tests.txt").write_text(
+        "files=show.sh\n"
+        "program=./show.sh\n"
+        "pre_compile_command=\"sh -c 'echo x >> counted.txt'\"\n"
+        'one command="wc -l < counted.txt" expected_stdout="1\\n"\n'
+        'two command="wc -l < counted.txt" expected_stdout="1\\n"\n'
+    )
+    submission = tmp_path / "sub"
+    submission.mkdir()
+    show = submission / "show.sh"
+    show.write_text("#!/bin/sh\n")
+    show.chmod(0o700)
+
+    stdout, _stderr, status = run_autotest(
+        ["-D", str(submission), "-a", str(spec), "--no_sandbox"]
+    )
+    assert "2 tests passed 0 tests failed" in stdout, stdout
+    assert status == 0

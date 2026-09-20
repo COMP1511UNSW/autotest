@@ -346,15 +346,43 @@ def run_legacy_hooks(context: RunContext) -> Optional[int]:
     return None
 
 
+def preparation_is_per_test(tests_to_run: list[_Test]) -> bool:
+    """
+    Must each test prepare in its own directory rather than the shared one?
+
+    Preparing once in the shared directory is what lets many tests share a
+    compilation, but it is wrong when the preparation differs between tests
+    and writes to the test directory.  COMP1521's 25t2final_q4 is the case
+    that found this: two of its tests have pre_compile_commands which write
+    different contents to the same temp.s, so whichever ran last decided what
+    both tests saw and one of them failed.
+
+    Only pre_compile_command is considered.  Checkers and compilers are keyed
+    by their command line and produce the same result wherever they run, and
+    every specification with per-test pre_compile_commands in the COMP1511,
+    COMP1521 and COMP2041 material is interpreted rather than compiled, so
+    nothing is losing a shared compilation here.
+    """
+    commands = {
+        str(test.parameters.get("pre_compile_command")) for test in tests_to_run
+    }
+    return len(commands) > 1
+
+
 def run_tests_concurrently(context: RunContext, tests_to_run: list[_Test]) -> list[int]:
     """
     run the tests, parallel_tests at a time, printing their results in
     test order as they complete; return their statuses in test order
     """
-    # phase 1: checkers and compilation, serially in the shared directory
+    # phase 1: checkers and compilation, serially in the shared directory,
+    # unless each test has to prepare in its own copy
+    per_test = preparation_is_per_test(tests_to_run)
     prepared: list[tuple[_Test, list[str], io.StringIO, Optional[TestOutcome]]] = []
     for test in tests_to_run:
         out = io.StringIO()
+        if per_test:
+            prepared.append((test, [], out, None))
+            continue
         test_files, outcome = prepare_test(context, test, out)
         prepared.append((test, test_files, out, outcome))
 
@@ -374,7 +402,9 @@ def run_tests_concurrently(context: RunContext, tests_to_run: list[_Test]) -> li
                 pending.append(
                     (
                         test,
-                        executor.submit(execute_test, context, test, test_files, out),
+                        executor.submit(
+                            execute_test, context, test, test_files, out, per_test
+                        ),
                     )
                 )
             else:
@@ -410,14 +440,19 @@ def run_one_test(context: RunContext, test: _Test) -> int:
 
 
 def prepare_test(
-    context: RunContext, test: _Test, out: io.StringIO
+    context: RunContext, test: _Test, out: io.StringIO, directory: str = ""
 ) -> tuple[list[str], Optional[TestOutcome]]:
     """
-    phase 1 for one test, in the shared directory (the cwd): run its checkers,
-    pre_compile_command and compilers, writing what they print to out
+    run one test's checkers, pre_compile_command and compilers, writing what
+    they print to out
+
+    directory is where they run, defaulting to the shared directory.  A test
+    whose pre_compile_command is its own prepares in its own copy instead: see
+    preparation_is_per_test().
 
     return (the test's files, a TestOutcome iff the test can not be run)
     """
+    directory = directory or context.shared_dir
     parameters = test.parameters
     label = parameters["label"]
     colored = context.colored
@@ -427,7 +462,9 @@ def prepare_test(
     glob_lists = [glob.glob(g) for g in test.files]
     test_files = [item for sublist in glob_lists for item in sublist]
 
-    if not run_checkers_pre_compile_command(context, test_files, parameters, out):
+    if not run_checkers_pre_compile_command(
+        context, test_files, parameters, out, directory
+    ):
         print(
             not_run_description,
             "because",
@@ -448,7 +485,7 @@ def prepare_test(
         )
         return (test_files, TestOutcome(-1, out.getvalue()))
 
-    if not run_compilers(context, test_files, parameters, out):
+    if not run_compilers(context, test_files, parameters, out, directory):
         print(
             not_run_description,
             "because",
@@ -507,11 +544,19 @@ def copy_readable(source: str, destination: str) -> None:
 
 
 def execute_test(  # noqa: C901, PLR0912, PLR0915 - one branch per stage of running one test
-    context: RunContext, test: _Test, test_files: list[str], out: io.StringIO
+    context: RunContext,
+    test: _Test,
+    test_files: list[str],
+    out: io.StringIO,
+    prepare_here: bool = False,
 ) -> TestOutcome:
     """
     phase 2 for one test, on a worker thread: copy the shared directory,
     then run setup_command and the test once per compile command in the copy
+
+    With prepare_here the test's checkers, pre_compile_command and compilers
+    run in that copy too, rather than having run once in the shared directory
+    (see preparation_is_per_test).
     """
     parameters = test.parameters
     debug = context.debug
@@ -552,6 +597,11 @@ def execute_test(  # noqa: C901, PLR0912, PLR0915 - one branch per stage of runn
             print("Warning:", e, file=sys.stderr)
         if debug > 1:
             print(f"Test {label}: running in {test_dir}", file=sys.stderr)
+
+        if prepare_here:
+            test_files, prepare_outcome = prepare_test(context, test, out, test_dir)
+            if prepare_outcome is not None:
+                return prepare_outcome
 
         linked_program: dict[str, str] = {}
         individual_tests = []
@@ -677,7 +727,11 @@ def remove_test_directory(context: RunContext, outcome: TestOutcome) -> None:
 
 
 def run_checkers_pre_compile_command(
-    context: RunContext, test_files: list[str], parameters: dict[str, Any], out
+    context: RunContext,
+    test_files: list[str],
+    parameters: dict[str, Any],
+    out,
+    directory: str = "",
 ) -> bool:
     """
     run any checkers specified for the files in the test
@@ -685,6 +739,7 @@ def run_checkers_pre_compile_command(
     if they haven't been run before
     return False iff any checker fails, True otherwise
     """
+    directory = directory or context.shared_dir
     for checker in parameters["checkers"]:
         if not checker:
             continue
@@ -692,7 +747,7 @@ def run_checkers_pre_compile_command(
             if not context.run_support_command(
                 checker,
                 parameters,
-                context.shared_dir,
+                directory,
                 out,
                 arguments=[filename],
                 print_command=True,
@@ -701,21 +756,32 @@ def run_checkers_pre_compile_command(
 
     pre_compile_command = parameters["pre_compile_command"]
     if pre_compile_command:
+        # cached only while every test prepares in the one shared directory:
+        # the command's effect is on the directory, so a test preparing in its
+        # own copy has to run it there however many others have run it
         return context.run_support_command(
-            pre_compile_command, parameters, context.shared_dir, out
+            pre_compile_command,
+            parameters,
+            directory,
+            out,
+            cache=directory == context.shared_dir,
         )
 
     return True
 
 
 def run_compilers(
-    context: RunContext, test_files: list[str], parameters: dict[str, Any], out
+    context: RunContext,
+    test_files: list[str],
+    parameters: dict[str, Any],
+    out,
+    directory: str = "",
 ) -> bool:
     """
     run any compilers specified for the the test
     return False iff any compiler fails, True otherwise
     """
-    directory = context.shared_dir
+    directory = directory or context.shared_dir
     compile_commands = parameters["compile_commands"]
     if not compile_commands:
         compile_commands = provide_multi_language_support(
@@ -739,6 +805,7 @@ def run_compilers(
             arguments=arguments,
             unlink=program,
             print_command=parameters["show_compile_command"],
+            cache=directory == context.shared_dir,
         ):
             return False
 
