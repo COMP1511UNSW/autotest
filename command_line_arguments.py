@@ -194,6 +194,8 @@ def parse_arguments():  # noqa: C901, PLR0915 - one branch and one statement per
         args.initial_parameters["report_resource_usage"] = True
     if args.check_stability is not None:
         args.initial_parameters["stability_runs"] = args.check_stability
+    # so a specification can see it, and dcc_output_checking can default off
+    args.initial_parameters.setdefault("marking", bool(args.marking))
 
     if args.debug:
         print("raw args:", args, file=sys.stderr)

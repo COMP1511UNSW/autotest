@@ -1181,10 +1181,25 @@ def finalize_dcc_output_checking(_name, value, parameters):
     if value is not None and not value_to_bool(value):
         return False
 
+    not_set = value is None or value == "" or str(value).lower()[0:1] == "a"
+
+    # Off by default when marking.  dcc compares the output itself, which
+    # means autotest hands it the answer in DCC_EXPECTED_STDOUT -- and the
+    # program being tested can read its own environment.  Four lines of C
+    # which print getenv("DCC_EXPECTED_STDOUT") pass every test.
+    #
+    # Nothing can hide it from a student running the exercise on their own
+    # account, because autotest reads the specification as them.  Marking is
+    # the one configuration where it can be kept back, and the one where it
+    # matters.  A specification that wants dcc's diff while marking can ask
+    # for it explicitly and this branch does not fire.
+    if parameters.get("marking") and not_set:
+        return False
+
     # dcc_output_checking not explicitly set
     # so use it if it is a simple execution of a C binary
     # more tests needed here
-    if (value is None or value == "" or str(value).lower()[0:1] == "a") and (
+    if not_set and (
         len(parameters["files"]) != 1
         or not parameters["files"][0].endswith(".c")
         or parameters["expected_stderr"]
@@ -1215,6 +1230,19 @@ def finalize_dcc_output_checking(_name, value, parameters):
 
 
 PARAMETER_LIST += [
+    Parameter(
+        "marking",
+        default=False,
+        description="""
+            True when autotest was run with **`-m`**, which selects a
+            specification's automarking tests.<br>
+            Set by the command line, not normally by a specification.  It
+            turns **`dcc_output_checking`** off by default, because that
+            parameter passes the expected output to the test in
+            `DCC_EXPECTED_STDOUT`, where the program being tested can read
+            it.
+        """,
+    ),
     Parameter(
         "dcc_output_checking",
         finalize=finalize_dcc_output_checking,

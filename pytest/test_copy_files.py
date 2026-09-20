@@ -200,7 +200,7 @@ def test_default_copy_takes_the_files_the_tests_name_and_their_includes(
     # the files of every test are copied before any test runs
     spec = (
         "files=m.c m.pl\ncompilers=[]\ncheckers=[]\n"
-        '1 command="ls" expected_stdout="Foo.pm\\nh.h\\nm.c\\nm.pl\\ntests.txt\\n"\n'
+        '1 command="ls" expected_stdout="Foo.pm\\nh.h\\nm.c\\nm.pl\\n"\n'
     )
     ex = make_exercise(
         tmp_path,
@@ -225,7 +225,7 @@ def test_default_copy_takes_a_perl_module_used_with_a_semicolon(
 ):
     ex = make_exercise(
         tmp_path,
-        'files=m.pl\ncheckers=[]\n1 command="ls" expected_stdout="Foo.pm\\nm.pl\\ntests.txt\\n"\n',
+        'files=m.pl\ncheckers=[]\n1 command="ls" expected_stdout="Foo.pm\\nm.pl\\n"\n',
         files={"m.pl": "use Foo;\nprint 1;\n", "Foo.pm": "package Foo; 1;\n"},
     )
     stdout, stderr, status = run_autotest(["-a", ex.autotest], cwd=ex.submission)
@@ -468,3 +468,33 @@ def test_a_supplied_file_still_replaces_a_read_only_submitted_file(tmp_path):
     temp_directories.copy_directory(str(supplied), str(working))
 
     assert submitted.read_text() == "staff\n"
+
+
+def test_a_specification_is_not_copied_into_the_test_directory(
+    tmp_path, make_exercise, run_autotest
+):
+    """
+    The program being tested must not be handed the expected outputs.
+
+    Copying the whole autotest directory put tests.txt beside the submission,
+    so a program could read every expected output -- and a student running
+    the exercise's own tests got automarking.txt too, where the autotest
+    keeps one.
+
+    Nothing can hide a specification from a student who runs autotest on
+    their own account, because autotest reads it as them. This is about what
+    the program under test is handed, and about marking, which runs as an
+    account they do not control.
+    """
+    ex = make_exercise(
+        tmp_path,
+        "files=a.sh\nprogram=./a.sh\ncheckers=[]\n"
+        '1 command="ls" expected_stdout="a.sh\\n"\n',
+        files={"a.sh": "#!/bin/sh\n"},
+    )
+    (tmp_path / "exercise" / "autotest" / "automarking.txt").write_text(
+        'files=a.sh\n1 command="true"\n'
+    )
+    stdout, stderr, status = run_autotest(["-a", ex.autotest], cwd=ex.submission)
+    assert status == 0, stdout + stderr
+    assert "1 tests passed 0 tests failed" in stdout, stdout

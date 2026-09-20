@@ -153,9 +153,19 @@ and its f-strings are evaluated as Python, with the privileges of the user runni
 A test specification must only ever come from staff, never from a submission.
 Files in the autotest directory are copied over the submission, so a submission can not replace `tests.txt`
 or anything else the autotest supplies.
-The whole autotest directory is copied, so everything in it - `tests.txt` itself, with every expected output,
-and any other file kept there - can be read by the program being tested:
-a sample solution or anything else students should not see must be kept elsewhere.
+The specification itself is not copied: `tests.txt` and `automarking.txt` are left behind,
+so the program being tested is not handed every expected output,
+and a student running an exercise's own tests is not handed its marking tests.
+Everything else in the autotest directory is copied and can be read by the program being tested,
+so a sample solution or anything else students should not see must be kept elsewhere.
+
+Nothing here hides a specification from a student running autotest on their own account:
+autotest reads it as them, so whatever it can read they can read.
+What this changes is what the *program being tested* is handed, and what a marking run - which runs as an account
+the student does not control - leaves within reach.
+For that reason `dcc_output_checking` is off by default when marking (`-m`):
+it passes the expected output to the test in `DCC_EXPECTED_STDOUT`, and a program can read its own environment.
+A specification that wants dcc's diff while marking can set `dcc_output_checking=1`.
 
 Submissions are not trusted. With the sandbox a submitted program can:
 

@@ -169,9 +169,19 @@ and its f-strings are evaluated as Python, with the privileges of the user runni
 A test specification must only ever come from staff, never from a submission.
 Files in the autotest directory are copied over the submission, so a submission can not replace `tests.txt`
 or anything else the autotest supplies.
-The whole autotest directory is copied, so everything in it - `tests.txt` itself, with every expected output,
-and any other file kept there - can be read by the program being tested:
-a sample solution or anything else students should not see must be kept elsewhere.
+The specification itself is not copied: `tests.txt` and `automarking.txt` are left behind,
+so the program being tested is not handed every expected output,
+and a student running an exercise's own tests is not handed its marking tests.
+Everything else in the autotest directory is copied and can be read by the program being tested,
+so a sample solution or anything else students should not see must be kept elsewhere.
+
+Nothing here hides a specification from a student running autotest on their own account:
+autotest reads it as them, so whatever it can read they can read.
+What this changes is what the *program being tested* is handed, and what a marking run - which runs as an account
+the student does not control - leaves within reach.
+For that reason `dcc_output_checking` is off by default when marking (`-m`):
+it passes the expected output to the test in `DCC_EXPECTED_STDOUT`, and a program can read its own environment.
+A specification that wants dcc's diff while marking can set `dcc_output_checking=1`.
 
 Submissions are not trusted. With the sandbox a submitted program can:
 
@@ -665,6 +675,22 @@ Maximum size of any core file written in bytes.
 
 Maximum stack size in bytes (0 for no limit).
 
+**`report_resource_usage`** = False
+
+
+If true, autotest measures what each test cost and prints a table
+after the results.  The command-line option is **`--stats`**.  
+Peak memory is the largest total autotest saw across the test's
+whole process group, which is the same quantity **`max_rss_bytes`**
+is enforced against, so a number in this table can be pasted into
+a specification.  
+It is sampled five times a second, so a test which allocates and
+exits between two samples reports less than it used, and a test
+shorter than a fifth of a second reports 0.  
+CPU time is not reported: the only ways to obtain it here are
+process-wide, and would attribute other tests' work to this one
+when tests run concurrently.
+
 **`max_rss_bytes`** = 1000000000
 
 
@@ -829,6 +855,17 @@ Any further characters are elided.
 If true semicolons are not replaced with newlines in the command to reproduce the test if it is included  in a test failure explanation.  
 Likely to be replaced with improved controls.
 
+**`marking`** = False
+
+
+True when autotest was run with **`-m`**, which selects a
+specification's automarking tests.  
+Set by the command line, not normally by a specification.  It
+turns **`dcc_output_checking`** off by default, because that
+parameter passes the expected output to the test in
+`DCC_EXPECTED_STDOUT`, where the program being tested can read
+it.
+
 **`dcc_output_checking`**
 
 
@@ -955,6 +992,25 @@ A `(host_pathname, sandbox_pathname)` tuple can be used to make a pathname visib
 location in the sandbox.  
 The test directory is always read-write and `/tmp`, `/dev/shm`, `/dev` and `/proc` are always private
 to the sandbox, so they do not need to be specified here.
+
+**`stability_runs`** = 1
+
+
+If greater than 1, each test is run this many times, each in a
+fresh copy of the test directory, and any test which does not
+reach the same result every time is reported as **`unstable`**
+rather than passed or failed.  
+The command-line option is **`--check_stability`**.  
+This is a staff check for specifications, not something to leave
+on: it multiplies the time a run takes.  
+Two runs are compared on the verdict and on the explanation of a
+failure, with hexadecimal constants removed, so an address printed
+by dcc or valgrind does not make every test look unstable.  A
+decimal value which varies between runs -- a pid, a timestamp, an
+elapsed time -- in the output of a test which *fails* is part of
+its explanation and will be reported.  
+A test with **`shared_test_directory`** is not repeated: a second
+run would see what the first left in that directory.
 
 **`parallel_tests`** = 1
 

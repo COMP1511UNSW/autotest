@@ -51,7 +51,9 @@ def copy_files_to_temp_directory(args, parameters):
     working_dir = fetch_submission(initial_dir, args)
 
     if supplied_files_directory:
-        copy_directory(supplied_files_directory, working_dir)
+        copy_directory(
+            supplied_files_directory, working_dir, ignore=ignore_specifications
+        )
 
     os.chdir(working_dir)
 
@@ -179,6 +181,18 @@ def is_within_submission(pathname):
 # exit_status == 0 -> all tests worked
 # exit_status == 1 -> 1 or more tests failed
 # exit_status >- 2, internal error - testing not completed
+
+
+# The names a test specification is found under (see find_test_specification).
+# Copying one into the test directory hands the program being tested every
+# expected output in it -- and, when a student runs the exercise's own tests,
+# hands them the marking tests as well.
+SPECIFICATION_NAMES = ("tests.txt", "automarking.txt")
+
+
+def ignore_specifications(_directory, names):
+    """the copy_directory ignore function: leave specifications behind"""
+    return [name for name in names if name in SPECIFICATION_NAMES]
 
 
 def copy_directory(src, dst, symlinks=False, ignore=None):

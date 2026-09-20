@@ -883,3 +883,29 @@ def test_a_compiler_ending_in_a_space_does_not_produce_a_double_space():
         initial_parameters={"supplied_files_directory": "."},
     )
     assert tests["1"]["compile_commands"] == ["gcc -Wall main.c a.c -o a"]
+
+
+def test_dcc_output_checking_is_off_when_marking():
+    """
+    dcc compares the output itself, so autotest hands it the answer in
+    DCC_EXPECTED_STDOUT -- and the program being tested reads its own
+    environment. Four lines of C which print it pass every test.
+
+    Nothing can hide it from a student running the exercise on their own
+    account. Marking is the one configuration where it can be kept back.
+    """
+    enabled, variables = dcc("files=a.c\nt command=./a expected_stdout=hi\n")
+    assert enabled is True
+    assert variables["DCC_EXPECTED_STDOUT"] == "hi"
+
+    enabled, variables = dcc("marking=1\nfiles=a.c\nt command=./a expected_stdout=hi\n")
+    assert enabled is False
+    assert variables == {}
+
+
+def test_a_marking_specification_can_ask_for_dcc_output_checking_anyway():
+    """Off by default, not forbidden."""
+    enabled, _variables = dcc(
+        "marking=1\nfiles=a.c\nt command=./a expected_stdout=hi dcc_output_checking=1\n"
+    )
+    assert enabled is True
