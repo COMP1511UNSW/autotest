@@ -3,17 +3,133 @@
 # This code needs extensive rewriting.
 # Much of the code can be moved to parameter_descriptions.py
 
-import codecs, os, re, shlex, subprocess, time
-from subprocess_with_resource_limits import run
-from explain_output_differences import explain_output_differences, sanitize_string
+import codecs
+import os
+import re
+import shlex
+import tempfile
+from typing import Any, Optional, Union
+
 from termcolor import colored as termcolor_colored
 
+from explain_output_differences import explain_output_differences, sanitize_string
+from subprocess_with_resource_limits import run
+from util import InternalError
 
-class InternalError(Exception):
-    pass
+# Output limits for support commands (compilers, checkers, setup and
+# postprocess commands).  They are not resource-limited like a test, but a
+# runaway compiler must not be able to exhaust autotest's memory.
+SUPPORT_COMMAND_MAX_OUTPUT_BYTES = 10_000_000
+
+
+class CommandRunner:
+    """
+    Runs every command that executes on the student's behalf: the test
+    command itself and, when sandbox_support_commands is true, the compilers,
+    checkers, setup and postprocess commands.
+
+    One runner is shared by every test of a run.  It owns the sandbox
+    decision (config is None when the sandbox is off) so that no test or
+    support command can forget to apply it, and it builds one Sandbox per
+    command because a Sandbox is single use.
+
+    temp_root is where the empty mountpoint directory for each sandbox root
+    is created: a sibling of the working directory, so it is neither inside
+    the work directory (which is copied per test) nor an ancestor of it (the
+    sandbox forbids that).  All callers pass an absolute work_dir and never
+    depend on the process's cwd, so tests can run on threads.
+    """
+
+    def __init__(self, config, temp_root, debug=0, note_sandbox=None):
+        self.config = config
+        self.temp_root = temp_root
+        self.debug = debug
+        self.note_sandbox = note_sandbox
+
+    def sandboxed(self, parameters, support_command=False):
+        """True iff this command must run inside a sandbox"""
+        if self.config is None:
+            return False
+        return not support_command or bool(
+            parameters.get("sandbox_support_commands", True)
+        )
+
+    def run(
+        self, command, parameters, work_dir, env, support_command=False, stdin=None
+    ):
+        """
+        run command with the test's parameters (resource limits, stdin, ...)
+        in work_dir, with environment env (None inherits autotest's own),
+        returning (stdout, stderr, returncode) from subprocess_with_resource_limits.run
+
+        A support command (compiler, checker, setup or postprocess command) is
+        not resource-limited like a test and does not read the test's stdin:
+        it gets stdin (a str, bytes or None for no input), which is how the
+        postprocess command receives the output it filters.
+        """
+        run_parameters = dict(parameters)
+        run_parameters.update(command=command, cwd=work_dir, env=env, sandbox=None)
+        if support_command:
+            # their output is still bounded so a runaway compiler can not
+            # exhaust memory
+            run_parameters.update(
+                stdin=stdin,
+                unicode_stdin=not isinstance(stdin, (bytes, bytearray)),
+                max_real_seconds=0,
+                max_cpu_seconds=0,
+                max_stack_bytes=0,
+                max_rss_bytes=0,
+                max_file_size_bytes=0,
+                max_processes=0,
+                max_open_files=0,
+                max_stdout_bytes=SUPPORT_COMMAND_MAX_OUTPUT_BYTES,
+                max_stderr_bytes=SUPPORT_COMMAND_MAX_OUTPUT_BYTES,
+            )
+        if not self.sandboxed(parameters, support_command):
+            return run(**run_parameters)
+
+        # imported here so autotest still works on platforms where the
+        # sandbox module can not be imported and the sandbox is off
+        from sandbox import Sandbox
+
+        # a shell resolves a string command itself, so only a list command's
+        # argv[0] can be checked inside the sandbox
+        argv0 = None if isinstance(command, str) else str(command[0])
+        root_dir = tempfile.mkdtemp(prefix=".sandbox-root-", dir=self.temp_root)
+        sandbox = None
+        try:
+            sandbox = Sandbox(
+                self.config,
+                work_dir,
+                root_dir,
+                debug=self.debug,
+                executable_check=argv0,
+                env=env,
+            )
+            if self.note_sandbox:
+                self.note_sandbox(sandbox)
+            run_parameters["sandbox"] = sandbox
+            return run(**run_parameters)
+        finally:
+            if sandbox is not None:
+                sandbox.close()
+            # the sandbox's root is mounted only in the child's private mount
+            # namespace so the directory is still empty on the host
+            try:
+                os.rmdir(root_dir)
+            except OSError:
+                pass
 
 
 class _Test:
+    # set by run_test() and check_files(); declared without a value so that a
+    # test which could not be run has no stdout attribute, which is how
+    # print_expected_output() tells
+    stdout: Any
+    stderr: Any
+    file_expected: Any
+    file_actual: Any
+
     def __init__(self, autotest_dir, **parameters):
         debug = parameters["debug"]
         self.autotest_dir = autotest_dir
@@ -21,14 +137,13 @@ class _Test:
         # FIXME implement UNICODE handling
         # ignore all characters but those specified
         if parameters.get("compare_only_characters", ""):
-            mapping = dict.fromkeys([chr(v) for v in range(0, 256)], None)
+            mapping = dict.fromkeys([chr(v) for v in range(256)], None)
             if debug:
                 print("compare_only_characters", parameters["compare_only_characters"])
             for c in parameters["compare_only_characters"] + "\n":
                 mapping.pop(c, None)
         else:
             mapping = dict.fromkeys(parameters["ignore_characters"], None)
-        # 		mapping['\r'] = '\n'
 
         self.canonical_translator = "".maketrans(mapping)
         self.command = parameters["command"]
@@ -47,26 +162,26 @@ class _Test:
     def __str__(self):
         return f"Test({self.label}, {self.program}, {self.command})"
 
-    def run_test(self, compile_command=""):
+    def run_test(self, work_dir, runner=None, compile_command=""):
+        """
+        run this test's command in work_dir (an absolute pathname) using
+        runner (a CommandRunner, or None to run without a sandbox from the
+        current directory) and return True iff the test passed
+
+        Every relative pathname in the test (expected files, the postprocess
+        command's cwd) is resolved against work_dir, never the process's cwd:
+        tests can run concurrently in their own directories.
+        """
         if self.debug > 1:
             print(
                 f'run_test(compile_command="{compile_command}", command="{self.command}")\n'
             )
+        self.work_dir = work_dir
+        self.runner = runner or CommandRunner(None, os.path.dirname(work_dir))
 
-        self.set_environ()
-
-        for attempt in range(3):
-            if self.debug > 1:
-                print("run_test attempt", attempt)
-            (stdout, stderr, self.returncode) = run(**self.parameters)
-            if stdout or stderr or self.returncode == 0 or not self.expected_stdout:
-                break
-            if self.debug > 1:
-                print("run_test retry", (stdout, stderr, self.returncode))
-            # ugly work-around for
-            # weird termination with non-zero exit status seen on some CSE servers
-            # ignore this execution and try again
-            time.sleep(1)
+        stdout, stderr, self.returncode = self.runner.run(
+            self.command, self.parameters, work_dir, self.parameters["environment"]
+        )
 
         if self.parameters["unicode_stdout"]:
             self.stdout = codecs.decode(stdout, "UTF-8", errors="replace")
@@ -116,14 +231,15 @@ class _Test:
 
     def check_files(self):
         for pathname, expected_contents in self.parameters["expected_files"].items():
+            path = os.path.join(self.work_dir, pathname)
             try:
                 if self.parameters["unicode_files"]:
-                    with open(pathname, encoding="UTF-8", errors="replace") as f:
-                        actual_contents = f.read()
+                    with open(path, encoding="UTF-8", errors="replace") as f:
+                        actual_contents: Union[str, bytes] = f.read()
                 else:
-                    with open(pathname, mode="rb") as f:
+                    with open(path, mode="rb") as f:
                         actual_contents = f.read()
-            except IOError:
+            except OSError:
                 self.long_explanation = f"Your program was expected to create a file named '{pathname}' and did not\n"
                 actual_contents = ""
             short_explanation = self.check_stream(
@@ -134,8 +250,11 @@ class _Test:
                 self.file_expected = expected_contents
                 self.file_actual = actual_contents
                 return short_explanation
+        return None
 
-    def check_stream(self, actual, expected, name):
+    def check_stream(  # noqa: C901, PLR0911 - one early return per way a stream can differ
+        self, actual, expected, name
+    ):
         if self.debug:
             print("name:", name)
             print("actual:", actual[0:256] if actual else "")
@@ -149,53 +268,49 @@ class _Test:
                 ):
                     if actual == bytearray(expected):
                         return None
-                    else:
-                        return "Your non-unicode output is not correct"
+                    return "Your non-unicode output is not correct"
                 # handling unicode input
                 if self.compare_strings(actual, expected):
                     return None
-                else:
-                    return "Incorrect " + name
-            else:
-                if name == "stderr":
-                    return "errors"
-                elif name == "output":
-                    return name + " produced when none expected"
-                else:
-                    return name + " should be empty and was not"
-        else:
-            if expected:
-                if name.lower().startswith("file"):
-                    return f"File {name} is empty"
-                else:
-                    return f"No {name} produced"
-            else:
-                return None
+                return "Incorrect " + name
+            if name == "stderr":
+                return "errors"
+            if name == "output":
+                return name + " produced when none expected"
+            return name + " should be empty and was not"
+        if expected:
+            if name.lower().startswith("file"):
+                return f"File {name} is empty"
+            return f"No {name} produced"
+        return None
 
     def make_string_canonical(self, raw_str, keep_all_lines=False):
         s = re.sub("\r\n?", "\n", raw_str)
-        filter = self.parameters.get("postprocess_output_command", None)
+        output_filter = self.parameters.get("postprocess_output_command", None)
 
-        if filter:
+        if output_filter:
             if self.debug:
-                print(f"postprocess_output_command={filter} str='{s}'")
-            p = subprocess.run(
-                filter,
-                stdout=subprocess.PIPE,
-                input=s,
-                stderr=subprocess.PIPE,
-                shell=isinstance(filter, str),
-                universal_newlines=True,
+                print(f"postprocess_output_command={output_filter} str='{s}'")
+            # the filter runs like the other support commands: in the
+            # test's directory with the test's environment, fed the text
+            stdout, stderr, returncode = self.runner.run(
+                output_filter,
+                self.parameters,
+                self.work_dir,
+                self.parameters["environment"],
+                support_command=True,
+                stdin=s,
             )
-            if p.stderr:
+            if stderr:
                 raise InternalError(
-                    "error from postprocess_output_command: " + p.stderr
+                    "error from postprocess_output_command: "
+                    + codecs.decode(stderr, "UTF-8", errors="replace")
                 )
-            if p.returncode:
+            if returncode:
                 raise InternalError(
                     "non-zero exit status from postprocess_output_command"
                 )
-            s = p.stdout
+            s = re.sub("\r\n?", "\n", codecs.decode(stdout, "UTF-8", errors="replace"))
             if self.debug:
                 print(f"after filter s='{s}'")
 
@@ -216,18 +331,9 @@ class _Test:
             expected
         )
 
-    def stdin_file_name(self):
-        return ""
-        # fix-me for reproduce commands we should generate a filename in some circumstances
-        if not self.stdin_file:
-            return self.stdin_file
-        if self.stdin_file[0] == "/":
-            return self.stdin_file
-        path = os.path.realpath(self.autotest_dir + "/" + self.stdin_file)
-        path = re.sub(r"/tmp_amd/\w+/export/\w+/\d/(\w+)", r"/home/\1", path)
-        return path
-
-    def get_long_explanation(self):
+    def get_long_explanation(  # noqa: C901, PLR0912, PLR0915 - the explanation a novice reads, built case by case
+        self,
+    ):
         if self.debug:
             print(
                 "get_long_explanation() short_explanation=",
@@ -244,9 +350,8 @@ class _Test:
         colored = (
             termcolor_colored
             if self.parameters["colorize_output"]
-            else lambda x, *a, **kw: x
+            else lambda x, *_args, **_kwargs: x
         )
-        # 		colored = lambda x,*a,**kw: x # disable use of blue below - hard to read, replace with more readable color
         self.long_explanation = ""
         if not self.stderr_ok:
             if self.expected_stderr:
@@ -302,7 +407,7 @@ class _Test:
             self.parameters["show_stdout_if_errors"] or self.stderr_ok
         ):
             # If we don't have unicode in out stdout, we should check for bad characters
-            bad_characters = False
+            bad_characters: Optional[str] = None
             if self.parameters["unicode_stdout"]:
                 bad_characters = self.check_bad_characters(
                     self.stdout, expected=self.expected_stdout
@@ -383,17 +488,14 @@ class _Test:
                     echo_command = echo_command_for_string(std_input)
                 else:
                     echo_command = (
-                        "echo -n" + "'" + self.insert_hex_slash_x(std_input[1:].hex())
+                        "echo -ne '" + self.insert_hex_slash_x(std_input.hex()) + "'"
                     )
 
-                if not self.stdin_file_name() or len(echo_command) < 128:
-                    if "shell" in self.parameters and (
-                        ";" in command or "&" in command or "|" in command
-                    ):
-                        command = "(" + command + ")"
-                    command = f"{echo_command} | {command}"
-                else:
-                    command += " <" + self.stdin_file_name()
+                if "shell" in self.parameters and (
+                    ";" in command or "&" in command or "|" in command
+                ):
+                    command = "(" + command + ")"
+                command = f"{echo_command} | {command}"
                 command = indent + command
             else:
                 if "shell" in self.parameters and not self.parameters.get(
@@ -438,31 +540,29 @@ class _Test:
             feedback += f"It should have been {expected_len} bytes long. "
             return feedback
 
-        n_different = 0
-        expected = int(expected.hex(), base=16)
-        actual = int(actual.hex(), base=16)
-        different_bytes = expected ^ actual
-        for i in range(len(str(bin(different_bytes))) - 2):
-            if different_bytes & (1 << i):
-                n_different += 1
+        # int.from_bytes copes with empty bytes, unlike int(b.hex(), 16)
+        different_bits = int.from_bytes(bytes(expected), "big") ^ int.from_bytes(
+            bytes(actual), "big"
+        )
+        n_different = bin(different_bits).count("1")
 
         feedback += f"There were {n_different} different bits between your output and the expected output\n"
 
         return feedback
 
-    def check_bad_characters(self, str, expected=""):
-        if re.search(r"[\x00-\x08\x14-\x1f\x7f-\xff]", expected):
+    def check_bad_characters(self, string, expected=""):
+        if re.search(r"[\x00-\x08\x0e-\x1f\x7f-\xff]", expected):
             return None
         colored = (
             termcolor_colored
             if self.parameters["colorize_output"]
-            else lambda x, *a, **kw: x
+            else lambda x, *_args, **_kwargs: x
         )
-        for line_number, line in enumerate(str.splitlines()):
-            m = re.search(r"^(.*?)([\x00-\x08\x14-\x1f\x7f-\xff])", line)
+        for line_number, line in enumerate(string.splitlines()):
+            m = re.search(r"^(.*?)([\x00-\x08\x0e-\x1f\x7f-\xff])", line)
             if not m:
                 continue
-            (prefix, offending_char) = m.groups()
+            prefix, offending_char = m.groups()
             offending_value = ord(offending_char)
             if offending_value == 0:
                 description = "zero byte ('" + colored(r"\0", "red") + "')"
@@ -486,18 +586,6 @@ class _Test:
     # inserts \x into a hex string, useful for printing sometimes
     def insert_hex_slash_x(self, string):
         return "\\x" + "\\x".join(string[i : i + 2] for i in range(0, len(string), 2))
-
-    def is_true(self, parameter):
-        if parameter not in self.parameters:
-            return None
-        value = self.parameters[parameter]
-        return value and value[0] not in "0fF"
-
-    def set_environ(self):
-        test_environ = self.parameters["environment"]
-        if os.environ != test_environ:
-            os.environ.clear()
-            os.environ.update(test_environ)
 
 
 def echo_command_for_string(test_input):
