@@ -23,6 +23,7 @@ import copy
 import errno
 import glob
 import io
+import json
 import os
 import re
 import shutil
@@ -96,6 +97,10 @@ class TestOutcome:
         self.resource_usage: Any = None
         # set by execute_test when a repeat reached a different result
         self.unstable: Optional[str] = None
+        # what the command did, for --json
+        self.exit_status: Optional[int] = None
+        self.signal: Optional[int] = None
+        self.compile_command: str = ""
 
 
 class RunContext:
@@ -156,6 +161,9 @@ class RunContext:
         self.previous_errors: dict[str, str] = {}
         # labels whose repeats disagreed: see execute_test and --check_stability
         self.unstable_labels: list[str] = []
+        # one record per test, appended by report_outcome on the main thread
+        # and so in test order whatever parallel_tests is: see --json
+        self.records: list[dict[str, Any]] = []
         # set by detect_unreadable_files() before any worker starts, and
         # left False for a serial run, which cannot race with itself
         self._shared_dir_has_unreadable_file: bool = False
@@ -351,7 +359,7 @@ def support_command_text(output: bytes) -> str:
     return re.sub("\r\n?", "\n", output.decode("utf-8", errors="replace"))
 
 
-def run_tests(  # noqa: C901 - one branch per thing a run can report: missing files, unstable tests, resource usage, the counts
+def run_tests(  # noqa: C901, PLR0912 - one branch per thing a run can report: missing files, unstable tests, resource usage, the json document, the counts
     tests: dict[str, _Test],
     global_parameters: dict[str, Any],
     args: Namespace,
@@ -406,6 +414,14 @@ def run_tests(  # noqa: C901 - one branch per thing a run can report: missing fi
     n_tests_passed = results.count(1)
     n_tests_failed = results.count(0)
     n_tests_not_run = results.count(-1)
+
+    if getattr(args, "json_results_file", None):
+        # built here, where the results are; written by run_autotest after
+        # the helper and the upload, so a path which can not be written
+        # costs the student neither
+        args.json_document = results_document(
+            context, args, n_tests_passed, n_tests_failed, n_tests_not_run
+        )
 
     if n_tests_passed:
         print(
@@ -1056,6 +1072,17 @@ def execute_test_once(  # noqa: C901, PLR0912, PLR0915 - one branch per stage of
             # computed here, not at print time: the postprocess command it
             # may run needs the test's directory
             outcome.long_explanation = individual_test.get_long_explanation()
+
+        # Recorded for every test, not only a failing one, so --json can say
+        # what ran and how it ended.  returncode follows Popen: negative is
+        # the signal that killed it.
+        reported = (failed_individual_tests or individual_tests)[0]
+        returncode = getattr(reported, "returncode", None)
+        if returncode is not None:
+            outcome.exit_status = returncode if returncode >= 0 else None
+            outcome.signal = -returncode if returncode < 0 else None
+        outcome.compile_command = getattr(reported, "compile_command", "") or ""
+
         # only a directory made for this test is recorded, so that neither
         # cleanup path can remove the shared one every test is running in
         outcome.test_dir = test_dir if own_directory else None
@@ -1100,6 +1127,77 @@ def print_resource_usage(context: RunContext, tests_to_run: list[_Test]) -> None
     )
 
 
+VERDICTS = {1: "passed", 0: "failed", -1: "could_not_be_run"}
+JSON_DOCUMENT_VERSION = 1
+
+
+def test_record(test: _Test, outcome: TestOutcome) -> dict[str, Any]:
+    """
+    One test, for --json.
+
+    explanation is null rather than "" where there is nothing to explain,
+    so that a consumer can test it: TestOutcome starts it as the empty
+    string and only a failure ever sets it.
+    """
+    usage = outcome.resource_usage
+    return {
+        "label": str(test.parameters["label"]),
+        "description": str(test.parameters["description"]),
+        "verdict": "unstable" if outcome.unstable else VERDICTS[outcome.status],
+        "explanation": outcome.short_explanation or None,
+        "unstable": outcome.unstable,
+        "exit_status": outcome.exit_status,
+        "signal": outcome.signal,
+        "compile_command": outcome.compile_command or None,
+        "resources": (
+            None
+            if usage is None
+            else {
+                "peak_rss_bytes": usage.peak_rss_bytes,
+                "real_seconds": round(usage.real_seconds, 3),
+            }
+        ),
+    }
+
+
+def results_document(
+    context: RunContext,
+    args: Namespace,
+    n_passed: int,
+    n_failed: int,
+    n_not_run: int,
+) -> dict[str, Any]:
+    """The whole run, for --json.  version is there so a consumer can depend
+    on this."""
+    return {
+        "version": JSON_DOCUMENT_VERSION,
+        "exercise": getattr(args, "exercise", None),
+        "summary": {
+            "passed": n_passed,
+            "failed": n_failed,
+            "could_not_be_run": n_not_run,
+            "unstable": len(context.unstable_labels),
+        },
+        "tests": context.records,
+    }
+
+
+def write_results_document(pathname: str, document: dict[str, Any]) -> None:
+    """
+    Write the --json document, after everything else the run does.
+
+    Called from run_autotest once the helper has run and the results have
+    been uploaded, so that a path which can not be written costs the student
+    neither of those.
+    """
+    text = json.dumps(document, indent=1, sort_keys=False)
+    if pathname == "-":
+        print(text)
+        return
+    with open(pathname, "w", encoding="utf-8") as f:
+        f.write(text + "\n")
+
+
 def report_outcome(context: RunContext, test: _Test, outcome: TestOutcome) -> int:
     """
     print a test's result (main thread, in test order) and record it on the
@@ -1109,6 +1207,7 @@ def report_outcome(context: RunContext, test: _Test, outcome: TestOutcome) -> in
     file = context.file
     colored = context.colored
     print(outcome.text, end="", file=file)
+    context.records.append(test_record(test, outcome))
     if outcome.status == -1:
         file.flush()
         return -1

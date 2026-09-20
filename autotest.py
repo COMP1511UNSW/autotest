@@ -59,7 +59,12 @@ if __name__ == "__main__":
 from command_line_arguments import REPO_INFORMATION, process_arguments
 from copy_files_to_temp_directory import copy_files_to_temp_directory
 from helper import run_helper
-from run_tests import generate_expected_output, run_tests, run_tests_creating_log
+from run_tests import (
+    generate_expected_output,
+    run_tests,
+    run_tests_creating_log,
+    write_results_document,
+)
 from upload_results import upload_results_http
 from util import AutotestException, TestSpecificationError, warn
 
@@ -179,6 +184,12 @@ def run_autotest():
 
     if uploading_results:
         upload_results_http(tests, parameters, args)
+
+    # last, so that a --json path which can not be written does not cost the
+    # student the helper or the upload of their results
+    document = getattr(args, "json_document", None)
+    if document is not None:
+        write_results_document(args.json_results_file, document)
 
     return exit_status
 

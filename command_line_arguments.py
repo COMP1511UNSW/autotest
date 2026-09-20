@@ -106,6 +106,12 @@ def parse_arguments():  # noqa: C901, PLR0915 - one branch and one statement per
         help="run N tests concurrently (sets parameter parallel_tests, 0 = one per CPU)",
     )
     parser.add_argument(
+        "--json",
+        metavar="FILE",
+        dest="json_results_file",
+        help="write a machine-readable description of the run to FILE ('-' for stdout)",
+    )
+    parser.add_argument(
         "--check_stability",
         nargs="?",
         type=int,

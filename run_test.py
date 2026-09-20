@@ -197,6 +197,12 @@ class _Test:
             )
         self.work_dir = work_dir
         self.runner = runner or CommandRunner(None, os.path.dirname(work_dir))
+        # kept so --json can say which compilation produced the binary
+        self.compile_command = (
+            " ".join(compile_command)
+            if isinstance(compile_command, list)
+            else str(compile_command)
+        )
 
         result = self.runner.run(
             self.command, self.parameters, work_dir, self.parameters["environment"]
