@@ -30,6 +30,16 @@
 #                   each test gets its own copy of its directory, and a
 #                   small tmpfs will fail with ENOSPC and look like a defect.
 #   REPLAY_ARGS     extra arguments for the new tree only, e.g. --no_sandbox
+#   REPLAY_IDENTICAL_FLOOR
+#                   fail unless at least this many activities produce identical
+#                   output.  A run where almost everything "changed" is usually
+#                   a broken environment rather than a broken tree.
+#   REPLAY_KNOWN_UNSTABLE
+#                   a file naming activities whose output legitimately varies
+#                   between two runs of the same tree -- they use threads or
+#                   randomness, so they differ from themselves.  They are
+#                   reported and not counted.  scripts/replay_unstable.txt
+#                   lists the ones found in the 26T2 material.
 #   REPLAY_OLD_ARGS extra arguments for the old tree only.  Give both trees
 #                   the same directory and only one of these to measure one
 #                   setting rather than one version: --no_sandbox here and
@@ -87,6 +97,8 @@ done
 jobs=${REPLAY_JOBS:-4}
 extra_args=${REPLAY_ARGS:-}
 old_extra_args=${REPLAY_OLD_ARGS:-}
+floor=${REPLAY_IDENTICAL_FLOOR:-0}
+unstable=${REPLAY_KNOWN_UNSTABLE:-}
 work=${REPLAY_TMPDIR:-${TMPDIR:-/tmp}}/autotest-replay.$$
 mkdir -p "$work/old" "$work/new" || exit 1
 
@@ -121,6 +133,8 @@ test "$n_activities" -gt 0 || {
 	exit 1
 }
 echo "replaying $n_activities activities, $jobs at a time"
+echo "  old: $old_tree ${old_extra_args:-(no extra arguments)}"
+echo "  new: $new_tree ${extra_args:-(no extra arguments)}"
 
 # Run one activity under one tree.  Everything that legitimately varies between
 # two runs -- temporary paths, the compiler's scratch object files, addresses,
@@ -186,12 +200,42 @@ echo "$(wc -l <"$changed") activities differed"
 # A changed verdict is what matters; everything else is a difference in
 # wording that a person should still read, but which does not change a mark.
 verdict='[0-9][0-9]* tests passed'
+n_verdicts_changed=0
+n_unstable=0
 while read -r name
 do
 	old_verdict=$(grep -o "$verdict.*" "$work/old/$name" | tail -1)
 	new_verdict=$(grep -o "$verdict.*" "$work/new/$name" | tail -1)
 	test "$old_verdict" = "$new_verdict" && continue
-	echo "  $name"
+	if test -n "$unstable" && grep -qxF "$name" "$unstable" 2>/dev/null
+	then
+		n_unstable=$((n_unstable + 1))
+		echo "  $name (known unstable, not counted)"
+	else
+		n_verdicts_changed=$((n_verdicts_changed + 1))
+		echo "  $name"
+	fi
 	echo "      old: ${old_verdict:-(no verdict: autotest did not finish)}"
 	echo "      new: ${new_verdict:-(no verdict: autotest did not finish)}"
 done <"$changed"
+
+test "$n_unstable" -eq 0 ||
+	echo "$n_unstable known-unstable activities were not counted"
+
+# The exit status, so that this can gate a change rather than produce a report
+# somebody has to remember to read.  Every defect the fixture suite missed --
+# a chmod race that corrupted a mark, a checker run once per test, a per-test
+# pre_compile_command, a sparse file copied byte by byte -- was found here,
+# while the suite was green.
+if test "$n_verdicts_changed" -gt 0
+then
+	echo "FAILED: $n_verdicts_changed activities reached a different verdict"
+	exit 1
+fi
+if test "$identical" -lt "$floor"
+then
+	echo "FAILED: only $identical of $n_activities activities were identical," \
+		"below the floor of $floor"
+	exit 1
+fi
+echo "PASSED: no activity reached a different verdict"

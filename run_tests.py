@@ -20,6 +20,7 @@
 import concurrent.futures
 import contextlib
 import copy
+import errno
 import glob
 import io
 import os
@@ -701,8 +702,11 @@ def copy_file_data(source: str, destination: str) -> None:
     filled the disk.
 
     The data is found with SEEK_DATA and SEEK_HOLE, so only the parts of the
-    file which hold anything are read.  A filesystem which does not support
-    them reports the whole file as data, which is the plain copy.
+    file which hold anything are read.  Most filesystems which do not support
+    them report the whole file as data, which is the plain copy; one which
+    rejects the request instead is copied whole rather than trusted, because
+    treating that error as "no more data" writes the student a file of the
+    right size full of zeroes and marks them on it.
     """
     with open(source, "rb") as src, open(destination, "wb") as dst:
         size = os.fstat(src.fileno()).st_size
@@ -710,8 +714,11 @@ def copy_file_data(source: str, destination: str) -> None:
         while offset < size:
             try:
                 data = os.lseek(src.fileno(), offset, os.SEEK_DATA)
-            except OSError:
-                break  # nothing but hole from here to the end
+            except OSError as e:
+                if e.errno == errno.ENXIO:
+                    break  # nothing but hole from here to the end
+                _copy_whole_file(src, dst, offset)
+                break
             hole = os.lseek(src.fileno(), data, os.SEEK_HOLE)
             src.seek(data)
             dst.seek(data)
@@ -726,6 +733,20 @@ def copy_file_data(source: str, destination: str) -> None:
         # the file may end in a hole, which nothing above writes
         dst.truncate(size)
     shutil.copystat(source, destination)
+
+
+def _copy_whole_file(src, dst, offset: int) -> None:
+    """Copy src to dst from offset on, every byte, holes included.
+
+    The fallback for a filesystem which will not answer SEEK_DATA.
+    """
+    src.seek(offset)
+    dst.seek(offset)
+    while True:
+        chunk = src.read(_COPY_CHUNK_BYTES)
+        if not chunk:
+            return
+        dst.write(chunk)
 
 
 def directory_has_unreadable_file(directory: str) -> bool:

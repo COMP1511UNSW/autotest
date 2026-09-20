@@ -786,3 +786,50 @@ def test_a_sparse_file_is_not_filled_in_when_each_test_is_given_a_copy(
     )
     assert "2 tests passed 0 tests failed" in stdout, stdout
     assert status == 0
+
+
+def test_a_file_is_copied_whole_when_the_filesystem_refuses_seek_data(
+    tmp_path, monkeypatch
+):
+    """
+    A filesystem which rejects SEEK_DATA gets a plain copy, not an empty one.
+
+    Treating any error as "no more data" left the destination the right size
+    and full of zeroes -- a student's file replaced by nothing, and the test
+    marked on it. Only ENXIO means the rest of the file is a hole.
+    """
+    import errno as errno_module
+
+    import run_tests
+
+    source = tmp_path / "source"
+    source.write_bytes(b"the submission\n" * 100)
+    destination = tmp_path / "destination"
+
+    real_lseek = os.lseek
+
+    def refusing_lseek(fd, position, whence):
+        if whence == os.SEEK_DATA:
+            raise OSError(errno_module.EINVAL, "not supported")
+        return real_lseek(fd, position, whence)
+
+    monkeypatch.setattr(run_tests.os, "lseek", refusing_lseek)
+    run_tests.copy_file_data(str(source), str(destination))
+
+    assert destination.read_bytes() == source.read_bytes()
+
+
+def test_a_sparse_file_ending_in_a_hole_keeps_its_size(tmp_path):
+    """ENXIO from SEEK_DATA means the rest is a hole, and truncate carries it."""
+    import run_tests
+
+    source = tmp_path / "source"
+    with open(source, "wb") as f:
+        f.write(b"head")
+        f.truncate(1 << 20)
+    destination = tmp_path / "destination"
+
+    run_tests.copy_file_data(str(source), str(destination))
+
+    assert destination.stat().st_size == source.stat().st_size
+    assert destination.read_bytes() == source.read_bytes()
