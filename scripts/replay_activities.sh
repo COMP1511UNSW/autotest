@@ -25,11 +25,23 @@
 #   REPLAY_PYTHON   interpreter to run autotest with (default: python3).
 #                   autotest's "#!" line is /usr/bin/python3 -I, which ignores
 #                   PYTHONPATH, so a virtual environment must be named here.
-#   REPLAY_JOBS     activities to run at once (default: 8)
+#   REPLAY_JOBS     activities to run at once (default: 4)
 #   REPLAY_TMPDIR   where the runs happen. Give it a filesystem with room:
 #                   each test gets its own copy of its directory, and a
 #                   small tmpfs will fail with ENOSPC and look like a defect.
 #   REPLAY_ARGS     extra arguments for the new tree only, e.g. --no_sandbox
+#
+# MEMORY. This is the expensive part of replaying a whole course, and running it
+# unbounded took a 30GB machine down. Each concurrent activity may compile with
+# dcc under a sanitizer or run valgrind, each sandboxed command mounts its own
+# tmpfs, and every test gets its own copy of its directory. A tmpfs holds its
+# contents in RAM, so pointing REPLAY_TMPDIR at one -- /tmp usually is one --
+# spends memory on every copy and fails with ENOSPC when the memory runs out.
+# Point it at real disk, keep REPLAY_JOBS low, and run the whole thing under a
+# cap so that a bad activity cannot take the machine with it:
+#
+#   systemd-run --user --scope -p MemoryMax=12G -p MemorySwapMax=4G -- \
+#     scripts/replay_activities.sh ...
 #
 set -u
 
@@ -62,10 +74,22 @@ done
 	echo "$0: set REPLAY_PYTHON to an interpreter that has it." 1>&2
 	exit 1
 }
-jobs=${REPLAY_JOBS:-8}
+jobs=${REPLAY_JOBS:-4}
 extra_args=${REPLAY_ARGS:-}
 work=${REPLAY_TMPDIR:-${TMPDIR:-/tmp}}/autotest-replay.$$
 mkdir -p "$work/old" "$work/new" || exit 1
+
+# A tmpfs holds its contents in RAM, and this writes a copy of a test's
+# directory per test. Replaying a whole course into /tmp is how a 30GB machine
+# was taken down; the failures on the way there look like defects in the tree
+# under test rather than like a full filesystem.
+case $(stat -f -c %T "$work" 2>/dev/null) in
+tmpfs | ramfs)
+	echo "$0: $work is on a RAM-backed filesystem ($(stat -f -c %T "$work"))." 1>&2
+	echo "$0: set REPLAY_TMPDIR to a directory on disk." 1>&2
+	exit 1
+	;;
+esac
 trap 'rm -rf "$work"' EXIT INT TERM
 
 activities="$work/activities"
