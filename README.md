@@ -19,23 +19,33 @@ files=is_prime.c
 
 ## Running Autotest
 
-Autotest allows flexible specification of command line arguments, so it can be comfortable
-used by novices who little experience with command-line programs.
+Autotest allows flexible specification of command line arguments, so it can be comfortably
+used by novices who have little experience with command-line programs.
 
 Autotest will typically be run via a wrapper shell script which
 specifies arguments and parameters values appropriate for a class, for example,
-specifiying the base directory to search for autotests, e.g:
+specifying the base directory to search for autotests, e.g:
 
 
 ```bash
 #!/bin/sh
 
+# Marking wrappers should require the sandbox: with sandbox = True autotest
+# stops on a host which can not create it instead of running student code
+# unconfined.  Leave it out (the default is auto) for a wrapper students run
+# on their own work.
+#
+# parallel_tests = 0 runs one test per CPU (or use -j N on the command line).
+
 parameters="
 	default_compilers = {'c' : [['clang', '-Werror', '-std=gnu11', '-g', '-lm']]}
 	upload_url = https://example.com/autotest.cgi
+	sandbox = True
+	# parallel_tests = 0
 "
 
-exec /usr/local/autotest/autotest.py --exercise_directory /home/class/activities --parameters "$parameters" "$@"```
+exec /usr/local/autotest/autotest.py --exercise_directory /home/class/activities --parameters "$parameters" "$@"
+```
 
 Students can then run the wrapper script simply specifying  the particular class exercise they wish to
 autotest, perhaps:
@@ -44,12 +54,12 @@ autotest, perhaps:
 $ autotest.sh is_prime
 ```
 
-Some useful command-line options are useful when developing test specifications, include:
+Some command-line options useful when developing test specifications include:
 
 **-a AUTOTEST_DIRECTORY, --autotest_directory AUTOTEST_DIRECTORY** specify directly the location
 of the autotest specification.
 
-**-D DIRECTORY, --directory DIRECTORY** copty files in the specified to the test directory.
+**-D DIRECTORY, --directory DIRECTORY** copy files in the specified directory to the test directory.
 
 **-g, --generate_expected_output** generate expected output for the tests
 by executing the supplied files.
@@ -64,16 +74,151 @@ $ autotest.py --generate_expected_output=update --directory my_solution  --autot
 
 ## Test Execution Environment
 
-A temporary directory is created for autotests and the program to be
-tested is copied there and compiled there if needed.
+A temporary directory is created for each run of autotest.
+The program to be tested (the submission) is copied there first,
+then any other files in the test specification directory are copied over it
+(see the `supplied_files_directory` parameter).
+Supplied files win, so a submission can not replace a file the autotest relies on,
+such as a checker, an expected output file or a supplied header file.
+Programs are compiled in this directory if needed.
 
-By default any other files in the test specification directory are also
-copied to the temporary directory (see the `supplied_files_directory` parameter)
+Each test then runs in its own copy of this directory,
+so a test never sees files created or modified by an earlier test.
+Anything a test needs which is not in the test specification directory
+must be created by its `setup_command`.
+
+Tests can be run in parallel by setting the parameter `parallel_tests`
+or with the command-line option `-j N`/`--jobs N` (`0` means one test per CPU).
+Output is printed in test order regardless of the order in which tests finish.
 
 By default tests are executed in an environment stripped of most environment variables
-but this can be specified with test parameters.
+but this can be specified with test parameters (see `environment_base`, `environment_set`, ...).
+The default `PATH` is `/bin:/usr/bin:/usr/local/bin:$PATH:.` - the current directory is searched last.
 
-By default tests are executed with resource limits which can be specified with test parameters.
+By default tests are executed with resource limits which can be specified with test parameters
+(`max_cpu_seconds`, `max_rss_bytes`, `max_stdout_bytes`, ...).
+A limit of `0` means no limit.
+
+### Sandbox
+
+Every command which executes student code - the test `command` and, by default,
+compilers, checkers, `pre_compile_command`, `setup_command` and `postprocess_output_command`
+(see `sandbox_support_commands`) - runs in an unprivileged Linux user-namespace sandbox.
+No root privileges or setuid helper are needed: the sandbox is built from
+what an unprivileged process is allowed to do on Linux.
+It adds about 10 ms to each command.
+
+The global parameter `sandbox` has three settings:
+
+* `auto` (the default): the sandbox is used when the host supports it,
+  otherwise a one-line warning is printed and programs run without a sandbox.
+* a true value (`1`, `yes`, `required`, ...): the sandbox is required,
+  autotest refuses to run if it can not be created.
+  Marking wrappers should set `sandbox = True`.
+* a false value (`0`, `no`, `off`, ...) or the command-line option `--no_sandbox`:
+  no sandbox, programs run with all the privileges of the user running autotest.
+
+Inside the sandbox:
+
+* the uid and gid are those of the user running autotest (it does not appear to be root);
+* the system directories `/bin`, `/etc`, `/lib*`, `/opt`, `/sbin` and `/usr` are visible read-only
+  (see `sandbox_read_only_mount_base` and `sandbox_read_only_mount`);
+* the test directory is the current directory and is read-write
+  (more directories can be made visible with `sandbox_read_write_mount`);
+* nothing else on the host exists: not the home directory of the user running autotest,
+  not `/home`, `/var`, `/root` or `/run`;
+* `HOME` and `PATH` are exactly what the `environment_*` parameters specify;
+* `/tmp` and `/dev/shm` are private in-memory directories of limited size
+  (`sandbox_tmp_bytes`, `sandbox_shm_bytes`);
+* `/dev` is minimal (`null`, `zero`, `random`, ...) and `/proc` is fresh:
+  only the processes of the command being run are visible;
+* there is no network except loopback (unless `sandbox_network=False`);
+* on x86_64 a seccomp filter denies creating nested user namespaces, `mount`, `setns`,
+  `io_uring`, `bpf`, kernel module loading and similar system calls (`sandbox_seccomp`);
+  debugging tools (`gdb`, `valgrind`, `strace`, dcc) still work;
+* Landlock rules are applied as a backstop where the kernel supports them (`sandbox_landlock`);
+* every process started by the command is killed when the command finishes.
+
+The sandbox does not provide:
+
+* memory or CPU accounting beyond `setrlimit` (`max_rss_bytes`, `max_cpu_seconds`, ...) -
+  cgroups are not used;
+* a disk quota - the test directory is on the host's filesystem and `max_file_size_bytes` limits
+  the size of each file but not their number, so a program can fill the disk (for the duration of its test:
+  the directory is removed afterwards); only `/tmp` and `/dev/shm` are size-limited, and being in memory,
+  `N` concurrent tests can use up to `N` x (`sandbox_tmp_bytes` + `sandbox_shm_bytes`) of RAM;
+* isolation from the other processes and files of the user running autotest beyond what the kernel gives -
+  the program can not see them by name, but it runs as that user
+  and anything it can reach (the test directory, `sandbox_read_write_mount` directories) is written as that user.
+
+Some hosts do not allow unprivileged user namespaces, so the sandbox can not be created:
+
+* Docker containers with Docker's default seccomp profile;
+* Ubuntu 24.04 and later with `kernel.apparmor_restrict_unprivileged_userns=1` (the default);
+* some hardened kernels (`kernel.unprivileged_userns_clone=0` or `user.max_user_namespaces=0`).
+
+On such a host `unshare -Ur true` fails with "Operation not permitted"; on a host where the sandbox works it succeeds silently.
+With `sandbox=auto` autotest prints a warning explaining this and runs without a sandbox;
+with `sandbox=True` it stops.
+
+### Security model
+
+Test specifications are trusted: `tests.txt` can run arbitrary commands
+and its f-strings are evaluated as Python, with the privileges of the user running autotest and outside the sandbox.
+A test specification must only ever come from staff, never from a submission.
+Files in the autotest directory are copied over the submission, so a submission can not replace `tests.txt`
+or anything else the autotest supplies.
+The whole autotest directory is copied, so everything in it - `tests.txt` itself, with every expected output,
+and any other file kept there - can be read by the program being tested:
+a sample solution or anything else students should not see must be kept elsewhere.
+
+Submissions are not trusted. With the sandbox a submitted program can:
+
+* run arbitrary code as the user running autotest, within the resource limits;
+* read the system directories and read and write its copy of the test directory;
+* fork, use threads, use loopback networking, and run debuggers on itself.
+
+It can not:
+
+* read or modify any other file of the user running autotest (or anybody else's) -
+  the submission is copied without following symbolic links, so a link can not smuggle one in;
+* see, signal or trace processes outside the sandbox, including other tests;
+* use the network;
+* gain privileges via nested user namespaces, `mount` or `setns`;
+* leave anything behind - the temporary directories are deleted when autotest finishes,
+  and any process it started is killed.
+
+With `sandbox=False` (or `--no_sandbox`) none of this holds: the submitted program has all the privileges
+of the user running autotest, which is acceptable when students test their own work on their own account
+but not for marking.
+Marking wrappers should set `sandbox = True` so that a host which can not sandbox stops
+instead of silently running student code unconfined,
+and should run autotest as an account with no access to anything a student should not see.
+
+### Changes in behaviour
+
+For maintainers upgrading from an earlier version of autotest:
+
+* files supplied by the autotest now win over same-named submitted files in every submission mode
+  (directory, `--stdin`, `--tarfile`, `--git`, ...); previously submitted files could replace them;
+* each test runs in its own copy of the test directory - a test no longer sees files
+  created by an earlier test unless its `setup_command` creates them;
+* tests can run concurrently (`parallel_tests`, `-j`); output order is unchanged;
+* programs which exit non-zero with no output are no longer silently re-run up to 3 times;
+* the default `PATH` is now `/bin:/usr/bin:/usr/local/bin:$PATH:.` - the current directory is searched last;
+* a resource limit of `0` (`max_cpu_seconds`, `max_real_seconds`, `max_rss_bytes`, ...) now really means no limit;
+* the sandbox parameter `sandbox` defaults to `auto`; `sandbox_command` is deprecated and ignored; `--inside_sandbox` is gone;
+* symbolic links in a submission given with `--directory` are copied as links, not followed
+  (a link to a file outside the submission does not resolve inside the sandbox);
+* `--gitlab_cse` and `--student` are gone: use `--git URL`; `--commit` requires `--git`;
+* obsolete command-line options (`--colorize`, `--no_show_diff`, `--c_compilers`, ...) now stop with a message
+  naming the parameter to use instead of being silently ignored;
+* boolean parameter values `no`, `n`, `off` and `None` are now false (as well as `0`, `false` and the empty string);
+* fixes: a bare `git@host:repo` argument is taken as the `--git` URL; `-m` with `-a DIR` finds `DIR/automarking.txt`;
+  `%` in `compiler_args` is replaced by the program, as documented; `use Foo;` in a Perl submission copies `Foo.pm`;
+  a `sandbox_read_only_mount` directory under `/tmp` is visible; on Python 3.12+ an f-string in `tests.txt` keeps
+  its `{{` and the spaces inside `{...}`, and `F'...'` and `rf'...'` are f-strings too;
+  a bundle asked for an exercise it does not embed says so instead of reporting an internal error.
 
 
 ## Tests
@@ -136,7 +281,7 @@ Parameters specified on the current line are not available in the evaluation of 
 
 Assignment to a parameter name which is not a builtin parameter listed in the section below,
 will produce an error unless the parameter name begins with a single '_'.
-Parameter names begining with '_' can be given values to be used in later f-strings.
+Parameter names beginning with '_' can be given values to be used in later f-strings.
 
 
 For convenience, values can also be written as shell-like unquoted strings
@@ -157,8 +302,8 @@ command=['./a.out', '--print', 'example.txt']
 
 Parameter values are coerced to an appropriate type if possible.
 If a boolean type is expected, values are converted to be True or False following
-Python rules, so for example . **`0  '' [] {}`** will all become  **`False`**,
-except strings with a first characters of '0', 'f' or 'F' are considered  **`False`**
+Python rules, so for example **`0  '' [] {}`** will all become  **`False`**,
+except that the empty string, `off` and strings starting with `0`, `f`, `F`, `n` or `N` (such as `false`, `no`, `None`) are considered  **`False`**
 
 ## Examples
 
@@ -197,6 +342,12 @@ test7  arguments=47 compare_only_characters="0123456789" expected_stdout="47 is 
 ## Test Parameters
 
 <!--- start - autogenerated from parameter_descriptions.py --->
+
+Boolean parameters accept any value.
+The empty string, and strings starting with `0`, `f` or `n` (`0`, `false`, `no`, `n`, ...)
+and `off` (ignoring case) are false; any other string is true.
+
+
 ### Parameters specifying command to be run
 
 **`program`**
@@ -267,7 +418,7 @@ the first file specified by  the parameter **`files`**.
 List of checkers.  Each checker is run once for each file supplied for a test.  The filename is appended as argument.  
 Checkers are only run once for a file.  
 If checker is a string it is run by passing it to a shell.
-Deprocated: if the value is a string containing ':' a list is formed by splitting the string at the ':'s.
+Deprecated: if the value is a string containing ':' a list is formed by splitting the string at the ':'s.
 
 **`default_compilers`** = {'c': \[\[\['dcc'\], \['clang', '-Wall'\], \['gcc', '-Wall'\]\]\], 'cc': \[\['g++', '-Wall'\]\], 'java': \[\['javac'\]\], 'rs': \[\['rustc'\]\]}
 
@@ -294,7 +445,7 @@ compilers = [[['dcc'], ['clang', '-Wall'], ['gcc', -Wall]]]
 ```
 The first element of this sub-list where the compiler can be found in PATH is used.  
 If compiler is a string it is run by passing it to a shell.  
-Deprocated: if the value is a string containing ':' a list is formed by splitting the string at the ':'s.
+Deprecated: if the value is a string containing ':' a list is formed by splitting the string at the ':'s.
 
 **`default_compiler_args`** = {'c': \[\['-o', '%'\]\], 'cc': \[\['-o', '%'\]\]}
 
@@ -324,7 +475,8 @@ In most cases, set these parameters will be more appropriate.
 
 If set **`setup_command`** is executed once before a test.  
 This is invisible to the user, unless **`setup_command`** produces output.  
-The test is not run if  **`setup_command`** has a non-zero exit-status.  
+The exit status of **`setup_command`** is ignored: the test is run regardless.  
+It runs in the test's own copy of the test directory (and in the sandbox, see **`sandbox_support_commands`**).  
 If **`setup_command`** is a string, it is passed to a shell.
 If **`setup_command`** is a list, it is executed directly.
 
@@ -343,7 +495,7 @@ It is usually specified in a wrapper shell script via -P.
 
 
 Bytes supplied on stdin for test.  
-Deprocated: stdin is not specified and the file *test_label*`.stdin` exists, its contents are used.  
+Deprecated: stdin is not specified and the file *test_label*`.stdin` exists, its contents are used.  
 Not yet implemented: if value is a list it is treated as list of pathname of file(s) containing bytes.
 
 **`unicode_stdin`** = True
@@ -389,10 +541,12 @@ Default:
 'LC_NUMERIC' : 'POSIX',
 'PERL5LIB' : '.',
 'HOME' : '.',
-'PATH' : '/bin:/usr/bin:/usr/local/bin:.:$PATH',
+'PATH' : '/bin:/usr/bin:/usr/local/bin:$PATH:.',
 },
 ```
-where `$PATH` is the original value of `PATH`.
+where `$PATH` is the original value of `PATH`.  
+The test directory (`.`) is searched last, so a file supplied for a test
+can not shadow a program found elsewhere in `PATH`.
 
 The environment  variables in **`environment_base`** are set and then,
 environment  variables specified in **`environment_set`** are set.<bt>
@@ -426,7 +580,7 @@ setting any variables specified in **`environment_set`**.
 
 Bytes expected on stdout for this test.  
 If value is a list it is treated as list of pathname of file(s) containing expected bytes.  
-Deprocated: if **`expected_stdout`** is not specified and the file *test_label*`.expected_stdout` exists,
+Deprecated: if **`expected_stdout`** is not specified and the file *test_label*`.stdout` exists,
 its contents are used.  
 Not yet implemented: handling of non-unicode output.  
 
@@ -435,7 +589,7 @@ Not yet implemented: handling of non-unicode output.
 
 Bytes expected on stderr for this test.  
 If value is a list it is treated as list of pathname of file(s) containing expected bytes.  
-Deprocated: if **`expected_stderr`** is not specified and the file *test_label*`.stderr` exists,
+Deprecated: if **`expected_stderr`** is not specified and the file *test_label*`.stderr` exists,
 its contents are used.  
 Not yet implemented: handling of non-unicode output.
 
@@ -476,13 +630,14 @@ If a resource limit is exceeded, the test is failed with an explanatory message.
 **`max_stdout_bytes`**
 
 
-Maximum number of bytes that can be written to *stdout*.
-
+Maximum number of bytes that can be written to *stdout* (0 for no limit).  
+If not specified, a limit is chosen based on the size of **`expected_stdout`**.
 
 **`max_stderr_bytes`**
 
 
-Maximum number of bytes that can be written to *stderr*.
+Maximum number of bytes that can be written to *stderr* (0 for no limit).  
+If not specified, a limit is chosen based on the size of **`expected_stderr`**.
 
 **`max_real_seconds`**
 
@@ -503,28 +658,28 @@ Maximum size of any core file written in bytes.
 **`max_stack_bytes`** = 32000000
 
 
-Maximum stack size in bytes.
+Maximum stack size in bytes (0 for no limit).
 
 **`max_rss_bytes`** = 100000000
 
 
-Maximum resident set size in bytes.
+Maximum resident set size in bytes (0 for no limit).
 
 **`max_file_size_bytes`** = 8192000
 
 
-Maximum size of any file created in bytes.
+Maximum size of any file created in bytes (0 for no limit).
 
 **`max_processes`** = 4096
 
 
-Maximum number of processes the current process may create.
+Maximum number of processes the current process may create (0 for no limit).  
 Note: unfortunately this is total per user processes not child processes
 
 **`max_open_files`** = 256
 
 
-Maximum number of files that can be simultaneously open
+Maximum number of files that can be simultaneously open (0 for no limit).
 
 ## Parameters controlling comparison of expected to actual output
 
@@ -632,6 +787,12 @@ Maximum lines included in components of test explanations.
 Any further lines are elided.
 Likely to be replaced with improved controls.
 
+**`show_all_lines`** = False
+
+
+If true lines are never elided.
+Likely to be replaced with improved controls.
+
 **`max_line_length_shown`** = 1024
 
 
@@ -678,45 +839,111 @@ Any specified fields/values are added to upload requests.
 
 Level of internal debugging output to print.
 
-**`sandbox`**
+### Parameters controlling sandboxing and parallelism
+
+**`sandbox`** = 'auto'
 
 
-Run tests within a sandbox - currently requires /usr/bin/unshare.
-Deliberate escape from sandbox may be possible.
-Only one sandbox is used for all tests.  This parameter must be set as a global parameter.
+Run each test (and, if **`sandbox_support_commands`** is true, compilers, checkers
+and setup commands) inside an unprivileged Linux user-namespace sandbox.  
+Inside the sandbox only system directories are visible (read-only, see **`sandbox_read_only_mount_base`**),
+the test directory is read-write, `/tmp` is a private directory (see **`sandbox_tmp_bytes`**),
+`/dev` is minimal, `/proc` is fresh, and there is no network access unless **`sandbox_network`** is false.  
+Landlock and seccomp are used as backstops when available (see **`sandbox_landlock`** and **`sandbox_seccomp`**).  
+`auto` uses the sandbox when the host supports it and prints a warning when it does not.  
+A true value (`1`, `yes`, `required`, ...) requires the sandbox:
+autotest refuses to run if it is not available - use this in marking wrappers.  
+A false value (`0`, `no`, `off`, ...) disables the sandbox:
+programs then run with all the privileges of the user running autotest.  
+Only one value is used for all tests.  This parameter must be set as a global parameter.
+
+**`sandbox_support_commands`** = True
+
+
+If true, **`compile_commands`**, **`checkers`**, **`pre_compile_command`**, **`setup_command`**
+and **`postprocess_output_command`** are also run inside the sandbox.  
+If false, only the test **`command`** is sandboxed.
 
 **`sandbox_network`** = True
 
 
-If running in a **`sandbox`**, sandbox network.
+If true, programs run in the **`sandbox`** have no network access:
+they are given a private network namespace with only a loopback interface.  
+Set to false to allow tests to use the network.
+
+**`sandbox_tmp_bytes`** = 268435456
+
+
+Size in bytes of the private `/tmp` seen by programs run in the **`sandbox`**.
+
+**`sandbox_shm_bytes`** = 67108864
+
+
+Size in bytes of the private `/dev/shm` seen by programs run in the **`sandbox`**.
+
+**`sandbox_seccomp`** = True
+
+
+If true, a seccomp filter blocking dangerous system calls is applied to programs run in the **`sandbox`**,
+when the kernel and architecture support it.  
+The namespace boundary of the sandbox does not depend on this.
+
+**`sandbox_landlock`** = True
+
+
+If true, Landlock rules restricting filesystem access are applied to programs run in the **`sandbox`**,
+when the kernel supports them.  
+The namespace boundary of the sandbox does not depend on this.
+
+**`sandbox_read_only_mount_base`** = \['/bin', '/etc', '/lib', '/lib32', '/lib64', '/libx32', '/opt', '/sbin', '/usr'\]
+
+
+Pathnames of files or directories made visible read-only in the **`sandbox`**.  
+Pathnames which do not exist on the host are ignored.  
+The parameter **`sandbox_read_only_mount`** should be used to add extra pathnames.  
+This parameter need only be set to stop one of these pathnames being visible.
 
 **`sandbox_read_only_mount`** = \[\]
 
 
-Pathnames of files or directories mounted read-only in the sandbox
-in addition to files or directories specified by **`sandbox_read_only_mount_base`**.
-A tuple can be to specify a diferent mount point in the sandbox.
+Pathnames of files or directories made visible read-only in the **`sandbox`**
+in addition to those specified by **`sandbox_read_only_mount_base`**.  
+A `(host_pathname, sandbox_pathname)` tuple can be used to make a pathname visible at a different
+location in the sandbox.
 
 **`sandbox_read_write_mount`** = \[\]
 
 
-Pathnames of files or directories visible mounted read-write in the sandbox
-in addition to files or directories specified by **`sandbox_read_write_mount_base`**.
-A tuple can be to specify a different mount point in the sandbox
-`/tmp`, `/proc`, `/sys` and `/dev` are always mounted directly read-write in the sandbox
+Pathnames of files or directories made visible read-write in the **`sandbox`**.  
+A `(host_pathname, sandbox_pathname)` tuple can be used to make a pathname visible at a different
+location in the sandbox.  
+The test directory is always read-write and `/tmp`, `/dev/shm`, `/dev` and `/proc` are always private
+to the sandbox, so they do not need to be specified here.
 
-**`sandbox_read_only_mount_base`** = \['/bin', '/etc', '/lib', '/lib32', '/lib64', '/libx32', '/sbin', '/usr'\]
-
-
-Pathnames of files or directories mounted read-only in the sandbox
-The parameter **`sandbox_read_only_mount`** should be used to add extra pathnames.<bt>
-This parameter need only be set to stop one of these pathnames being mounted.
-
-**`sandbox_command`**
+**`parallel_tests`** = 1
 
 
-Command used to create sandbox
-It is given two arguments: the full pathname of the autotest.py and '--inside_sandbox'
+Number of tests executed concurrently.  
+`0` means one test per CPU.  
+Each test runs in its own copy of the test directory,
+unless **`shared_test_directory`** is set.  
+Output is printed in test order, regardless of the order in which tests finish.  
+Only one value is used for all tests.  This parameter must be set as a global parameter.
+
+**`shared_test_directory`** = False
+
+
+Run every test in one directory, instead of giving each test its own copy.
+
+Tests then see files left behind by tests that ran before them, which is
+how autotest behaved before per-test directories were introduced.
+Set this for a test specification where one test prepares files that a
+later test uses, for example where one test's **`setup_command`**
+creates files that a test without a **`setup_command`** then reads.
+
+Tests sharing a directory can not be run concurrently,
+so **`parallel_tests`** is ignored and the tests are run one at a time.  
+Only one value is used for all tests.  This parameter must be set as a global parameter.
 
 <!--- end - autogenerated from parameter_descriptions.py --->
 
@@ -745,3 +972,45 @@ $ ./my_autotest exercise2
 Test 0 (./prime 42) - passed
 1 tests passed 0 tests failed
 ```
+
+
+## Development
+
+The static checks and the tests are run with `make`; the tools and their
+configuration are in `Pipfile` (`pipenv install --dev`) and `pyproject.toml`.
+With the tools in a virtualenv rather than under pipenv, name its `bin`
+directory: `make lint VENV_BIN=/path/to/venv/bin`.
+
+* `make lint` runs five checkers and must exit 0.
+  `ruff` (pyflakes, pycodestyle, bugbear, the flake8-bandit security rules, complexity,
+  naming, import order and the pylint rules ruff implements), `black --check` and
+  `mypy` (strict for `sandbox*.py` and `subprocess_with_resource_limits.py`, the security
+  boundary) cover the whole tree, `pytest/` included.
+  `bandit` (security) and `vulture` (dead code) cover the program modules only: the tests'
+  security rules come from ruff's `S` family and their dead code from `F`, and vulture can
+  not see that pytest calls a fixture or a hook.
+  `FA102` is what keeps the Python 3.9 floor: `X | Y` in an annotation is a `TypeError` at
+  import time on 3.9 unless the module has `from __future__ import annotations`, and mypy
+  can not catch it because it has to be told `python_version = "3.10"`.
+* `make format` rewrites the tree with `black` and ruff's safe fixes.
+* `make test` runs the `pytest/` suite; a warning is an error.
+  Tests which need the sandbox (unprivileged user namespaces) or a tool which is not installed skip.
+* `make coverage` runs the suite under branch coverage, the `autotest.py` subprocesses included
+  (through `patch = ["subprocess"]` in `[tool.coverage.run]`), and fails below the `fail_under`
+  percentage in `pyproject.toml` (raise it when coverage improves, never lower it).
+  Run it on a host which can build the sandbox: where it can not, the sandbox tests skip and the
+  total falls by about six points.
+  Code which runs in a forked child that ends with `os._exit()` or `execve()` can not be measured
+  however well it is tested, and is excluded by a comment on its `def` line naming the test which
+  exercises it: `# runs only in the sandbox child: <test>` for the stages of `sandbox.py` and
+  `sandbox_landlock.py`, `# runs in the forked child before exec: <test>` for the three functions
+  of `subprocess_with_resource_limits.py` which apply the resource limits to every command,
+  `--no_sandbox` included.
+* `make check` is `lint` then `test`; the GitHub workflows run the same targets.
+
+A checker finding is fixed, not silenced. Where a rule is wrong for one line the suppression is inline,
+names the rule and says why: `# noqa: CODE - reason` for ruff, `# nosec BXXX` for bandit
+(with the reason before it, as bandit warns about every word after the test id).
+The complexity rules are waived on the `def` line of each legacy function that needs it, never for a
+whole file, so a newly added complex function is still reported. The few genuinely file-wide
+exceptions are listed in `pyproject.toml` with the reason.

@@ -3,7 +3,7 @@
 #
 # Build a single executable for autotest including files for 0 or more embedded autotests
 #
-# The executable and all the autotest functionality and can also run non-embedded autotests.
+# The executable contains all the autotest functionality and can also run non-embedded autotests.
 #
 # The executable contains a "#!" line followed by a zip of the autotest Python source.
 #
@@ -11,7 +11,7 @@
 #
 
 
-# This functionality could be embdedded in autotest itself
+# This functionality could be embedded in autotest itself
 
 case "$#" in
 0)
@@ -31,11 +31,11 @@ test -r "$src_directory"/autotest.py || {
 }
 
 temp_dir=$(mktemp -d /tmp/bundle_autotests.XXXXXXXXXX) || exit 1
-trap 'rm -fr $temp_dir; exit' EXIT INT TERM
+trap 'rm -fr "$temp_dir"; exit' EXIT INT TERM
 
-cp "$src_directory"/*.py $temp_dir/
-mkdir $temp_dir/$embedded_autotests_package_name
-touch $temp_dir/$embedded_autotests_package_name/__init__.py
+cp "$src_directory"/*.py "$temp_dir"/
+mkdir "$temp_dir/$embedded_autotests_package_name"
+touch "$temp_dir/$embedded_autotests_package_name/__init__.py"
 
 # build tar files for each autotest to be embedded
 for pathname in "$@"
@@ -60,7 +60,7 @@ do
 		exercise=$(basename "$(dirname "$autotest_directory")")
 
 	test -z "$exercise" && {
-		echo "$pathname  - counld not determine exercise name"  1>&2
+		echo "$pathname  - could not determine exercise name"  1>&2
 		exit 1
 	}
 
@@ -70,22 +70,22 @@ do
 
 	# tar must be xz compressed because code in load_embedded_autotest function expects this
 
-	tar --directory "$autotest_directory" --dereference --xz -cf $temp_dir/$embedded_autotests_package_name/"$exercise.tar" $add_to_tar
+	tar --directory "$autotest_directory" --dereference --xz -cf "$temp_dir/$embedded_autotests_package_name/$exercise.tar" $add_to_tar
 
 done
 
 (
-	cd $temp_dir
+	cd "$temp_dir" || exit 1
 
 	test -r __main__.py || cat >__main__.py <<'eof'
 from autotest import main
 if __name__ == '__main__': main()
 eof
 
-	zip .src.zip --quiet -9 -r *.* $embedded_autotests_package_name
+	zip .src.zip --quiet -9 -r *.* "$embedded_autotests_package_name"
 )
 
-echo '#!/usr/bin/env python3' >$generated_executable
-cat $temp_dir/.src.zip >>$generated_executable
+echo '#!/usr/bin/env python3' >"$generated_executable"
+cat "$temp_dir"/.src.zip >>"$generated_executable"
 
-chmod +x $generated_executable
+chmod +x "$generated_executable"

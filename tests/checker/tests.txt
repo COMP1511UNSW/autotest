@@ -1,5 +1,5 @@
 files=autotest.py
-arguments=-a autotest
+arguments=-a autotest --no_sandbox
 # stop minor updates to autotest output breaking test
 ignore_blank_lines=1
 ignore_case=1
