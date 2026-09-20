@@ -1,10 +1,12 @@
 # some shared utility code
 
 
-import os, re, sys
+import os
+import re
+import sys
 
 
-class AutotestException(Exception):
+class AutotestException(Exception):  # noqa: N818 - the name every module uses
     pass
 
 
