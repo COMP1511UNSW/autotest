@@ -6,6 +6,7 @@ Run from the repository root:
 
 import concurrent.futures
 import os
+import shlex
 import signal
 import sys
 import threading
@@ -482,3 +483,44 @@ def test_sandbox_flag_from_test_parameters_is_ignored():
     # tests.txt's sandbox=1 parameter is a flag, not a sandbox object
     assert run("echo ok", sandbox=True) == (b"ok\n", b"", 0)
     assert run("echo ok", sandbox="auto") == (b"ok\n", b"", 0)
+
+
+def test_memory_limit_stops_a_program_that_allocates_too_much():
+    """
+    max_rss_bytes is enforced by the supervisor, not by setrlimit.
+
+    Linux has ignored RLIMIT_RSS since 2.4, so this parameter did nothing for
+    years: replaying COMP1521 hit a single mipsy process at 8GB resident and
+    took the machine down with it.
+    """
+    allocate = "b = []\nfor i in range(64):\n    b.append(bytearray(32 * 1024 * 1024))\nprint('allocated 2GB')\n"
+    stdout, stderr, returncode = run(
+        [sys.executable, "-c", allocate],
+        max_rss_bytes=200 * 1024 * 1024,
+        max_real_seconds=60,
+    )
+    assert b"allocated 2GB" not in stdout
+    assert stderr == b"Error: memory limit of 209715200 bytes exceeded\n"
+    assert returncode == -signal.SIGKILL
+
+
+def test_memory_limit_of_zero_means_unlimited():
+    allocate = "b = []\nfor i in range(8):\n    b.append(bytearray(32 * 1024 * 1024))\nprint('allocated 256MB')\n"
+    stdout, stderr, returncode = run(
+        [sys.executable, "-c", allocate], max_rss_bytes=0, max_real_seconds=60
+    )
+    assert stdout == b"allocated 256MB\n"
+    assert stderr == b""
+    assert returncode == 0
+
+
+def test_memory_limit_counts_what_the_test_forks():
+    """The process that exhausts a machine is as likely to be a child."""
+    child = "b = bytearray(400 * 1024 * 1024)\nimport time\ntime.sleep(30)\n"
+    stdout, stderr, returncode = run(
+        f"{sys.executable} -c {shlex.quote(child)} & wait",
+        max_rss_bytes=150 * 1024 * 1024,
+        max_real_seconds=60,
+    )
+    assert b"memory limit" in stderr, (stdout, stderr, returncode)
+    assert returncode == -signal.SIGKILL

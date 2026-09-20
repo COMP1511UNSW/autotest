@@ -47,6 +47,19 @@ _stopped = threading.Event()
 # 1000000000 to mean "unlimited"; the loop re-computes the remaining time.
 _MAX_SELECT_SECONDS = 86400.0
 
+# How often the supervisor adds up the process group's memory.  A program can
+# exceed the limit between two samples, so this bounds how far over it gets:
+# the point is to stop a runaway before it reaches the machine's memory, not to
+# account for every page.
+_MEMORY_POLL_SECONDS = 0.2
+
+_PAGE_SIZE = resource.getpagesize()
+
+# indices into /proc/<pid>/stat counting from the field after the ')' that ends
+# the executable name: state, ppid, pgrp, ... rss
+_STAT_PGRP_INDEX = 2
+_STAT_RSS_INDEX = 21
+
 # Exit statuses a sandbox uses to report its own failure (see the sandbox
 # interface described in run()).  These match the shell's conventions so a
 # sandbox implemented with exec'd helpers reports the same numbers.
@@ -185,6 +198,7 @@ def run(  # noqa: C901, PLR0912 - the argument checks, Popen and the result tran
             max_real_seconds,
             max_stdout_bytes,
             max_stderr_bytes,
+            max_rss_bytes,
             debug,
         )
     finally:
@@ -389,6 +403,7 @@ def _supervise(
     max_real_seconds: int | None,
     max_stdout_bytes: int | None,
     max_stderr_bytes: int | None,
+    max_rss_bytes: int | None,
     debug: int,
 ) -> _Output:
     """Collect the child's output, enforce the wall-clock limit and reap it.
@@ -411,6 +426,7 @@ def _supervise(
             max_real_seconds,
             max_stdout_bytes,
             max_stderr_bytes,
+            max_rss_bytes,
         )
         # Both pipes are closed but the child may still be running (it can
         # close its own output), so the wall clock applies to its exit too.
@@ -433,7 +449,7 @@ def _supervise(
     return output
 
 
-def _collect_output(
+def _collect_output(  # noqa: C901 - one branch per way a command is stopped: output, memory, wall clock
     process: subprocess.Popen[bytes],
     pgid: int,
     output: _Output,
@@ -441,9 +457,10 @@ def _collect_output(
     max_real_seconds: int | None,
     max_stdout_bytes: int | None,
     max_stderr_bytes: int | None,
+    max_rss_bytes: int | None,
 ) -> None:
-    """Read stdout and stderr until both close, a stream overflows or the
-    wall clock runs out.
+    """Read stdout and stderr until both close, a stream overflows, the
+    process group uses too much memory, or the wall clock runs out.
 
     Reading stops as soon as the group is killed: a process that has
     escaped the group could otherwise hold the pipe open forever.
@@ -463,6 +480,13 @@ def _collect_output(
                 timeout = min(
                     max(0.0, deadline - time.monotonic()), _MAX_SELECT_SECONDS
                 )
+            if max_rss_bytes:
+                # a program that allocates without printing produces no
+                # readable event, so the wait is capped to keep sampling
+                timeout = min(
+                    _MEMORY_POLL_SECONDS,
+                    _MAX_SELECT_SECONDS if timeout is None else timeout,
+                )
             for key, _events in selector.select(timeout):
                 data = os.read(key.fd, _READ_CHUNK_BYTES)
                 if not data:
@@ -478,6 +502,9 @@ def _collect_output(
                     output.stderr += _too_much_output_error(limit)
                 output.killed = True
                 _kill_process_group(pgid)
+                return
+            if max_rss_bytes and _process_group_rss(pgid) > max_rss_bytes:
+                _memory_exceeded(output, pgid, max_rss_bytes)
                 return
             if deadline is not None and time.monotonic() >= deadline:
                 _real_time_exceeded(output, pgid, max_real_seconds)
@@ -520,6 +547,56 @@ def _kill_process_group(pgid: int) -> None:
         os.killpg(pgid, signal.SIGKILL)
     except ProcessLookupError:
         pass
+
+
+def _process_group_rss(pgid: int) -> int:
+    """Return the resident memory of every process in pgid, in bytes.
+
+    Linux has ignored RLIMIT_RSS since 2.4, so setrlimit cannot enforce
+    max_rss_bytes and this is what does.  The alternatives were rejected:
+    RLIMIT_AS and RLIMIT_DATA both count the address space that
+    address-sanitizer reserves, so they stop dcc's own programs from
+    starting, and a cgroup needs a delegated controller that an
+    unprivileged autotest on a teaching machine may not have.
+
+    The whole group is summed, not just the leader, because the process
+    that exhausts a machine is as likely to be one the test forked.  Shared
+    pages are counted once per process, so this over-estimates for a
+    program with many children; that errs towards stopping a program early
+    rather than letting it take the machine down.
+    """
+    total_pages = 0
+    for entry in os.listdir("/proc"):
+        if not entry.isdigit():
+            continue
+        try:
+            with open(f"/proc/{entry}/stat", "rb") as f:
+                stat_line = f.read()
+        except OSError:
+            # the process exited while we were looking at it
+            continue
+        # the second field is the executable name in parentheses and may
+        # itself contain spaces and parentheses, so the fields that matter
+        # are counted from the last ')' rather than from the start
+        _, _, rest = stat_line.rpartition(b")")
+        fields = rest.split()
+        # after the name come state, ppid, pgrp, ... and rss is the 22nd
+        if len(fields) < _STAT_RSS_INDEX + 1:
+            continue
+        try:
+            if int(fields[_STAT_PGRP_INDEX]) != pgid:
+                continue
+            total_pages += int(fields[_STAT_RSS_INDEX])
+        except ValueError:
+            continue
+    return total_pages * _PAGE_SIZE
+
+
+def _memory_exceeded(output: _Output, pgid: int, max_rss_bytes: int | None) -> None:
+    """Record that the memory limit was hit and kill the group."""
+    output.stderr += f"Error: memory limit of {max_rss_bytes} bytes exceeded\n".encode()
+    output.killed = True
+    _kill_process_group(pgid)
 
 
 def _real_time_exceeded(

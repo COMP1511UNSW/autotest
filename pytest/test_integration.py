@@ -90,11 +90,18 @@ def run_fixture(name, *arguments, cwd=REPO_ROOT):
 
 def normalise(output):
     """
-    remove what legitimately varies between runs: the pid in bash's
-    "line 1: 12345 File size limit exceeded" message (inside the sandbox's
-    pid namespace it is small and stable, on main it is the host pid)
+    remove what legitimately varies between runs:
+
+    the pid in bash's "line 1: 12345 File size limit exceeded" message
+    (inside the sandbox's pid namespace it is small and stable, on main it
+    is the host pid), and which of /bin/bash and /usr/bin/bash names the
+    shell in it.  Both are the same binary on a usr-merged system; they
+    differ because shutil.which() sees a different PATH on the two trees,
+    main having replaced its own environment with the test's before
+    resolving it.  Which path that returns is not behaviour worth pinning.
     """
-    return re.sub(r"(line \d+:) +\d+ ", r"\1 PID ", output)
+    output = re.sub(r"(line \d+:) +\d+ ", r"\1 PID ", output)
+    return re.sub(r"^/(usr/)?bin/(bash|sh):", r"/SHELL:", output, flags=re.MULTILINE)
 
 
 # the comparison against main is the suite's broadest oracle, so a runner

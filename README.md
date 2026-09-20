@@ -663,7 +663,17 @@ Maximum stack size in bytes (0 for no limit).
 **`max_rss_bytes`** = 100000000
 
 
-Maximum resident set size in bytes (0 for no limit).
+Maximum resident memory in bytes for the test and everything it starts
+(0 for no limit).
+
+Unlike the other limits this one is not enforced by `setrlimit`:
+Linux has ignored `RLIMIT_RSS` since 2.4, so for years this parameter
+did nothing at all and a single program could exhaust a teaching
+machine's memory.  Autotest now adds up the resident memory of the
+test's process group a few times a second and stops it when it goes
+over.  A program can therefore exceed the limit briefly before it is
+stopped, and memory shared between a program and its children is
+counted once for each of them.
 
 **`max_file_size_bytes`** = 8192000
 
