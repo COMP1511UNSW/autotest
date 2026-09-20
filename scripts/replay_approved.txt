@@ -1,31 +1,34 @@
 # Verdict changes reviewed and accepted for feat/sandbox-and-parallel,
-# against main, over the COMP1511, COMP1521 and COMP2041 26T2 activities.
+# against main, over the COMP1511, COMP1521 and COMP2041 26T2 activities,
+# with each course's _infra submodule checked out.
 #
 # Pass this to scripts/replay_activities.sh as REPLAY_APPROVED_CHANGES.  A
 # whole line must match, so an activity which moves somewhere else fails the
 # gate again even though its name is here.
 #
 # Every one of these is an improvement or a wash:
-#   * twenty COMP2041 activities and about_me go from "could not be run" to a
-#     real result, all of them the cleared-environment defect in main;
+#
+#   * about_me and twenty COMP2041 activities go from "could not be run" to a
+#     real result.  All of them are main clearing os.environ process-wide, so
+#     a staff pre_compile_command ran with the wrong environment and silently
+#     did nothing;
 #   * 23T2final2_q1 and 24T2final_q1 go from 0/4 to 4/4;
 #   * unique_files goes from no verdict at all to 8 of 8, because main cannot
 #     parse shared_test_directory;
 #   * reverse_file_bytes passes one more test;
 #   * rain moves from 68 failures reported as "execvp: No such file or
 #     directory" to "could not be run", which is the truth: its model
-#     solution does not link;
-#   * list_delete_ordered, lists_diagonal, musical_chairs, street_fighter and
-#     x are the activities whose checkers live in an un-checked-out _infra
-#     submodule.  main dies with an internal error and no verdict at all;
-#     this branch reports a failed check and finishes.
+#     solution does not link.  Both trees score it zero;
+#   * the COMP2041 activities which end at "0 passed / N failed" need tools or
+#     hosts this machine does not have (ffmpeg, image tools, the network).
+#     They scored zero under main too.
 #
+# An earlier version of this file had five more COMP1511 entries.  They were
+# not autotest's doing: the checkers of those activities are symbolic links
+# into an _infra submodule which was not checked out, so main died with an
+# internal error and no verdict while this branch reported a failed check.
+# With the submodule present both trees run the checkers and agree.
 about_me | 0 tests passed 0 tests failed  1 tests could not be run | 1 tests passed 0 tests failed 
-list_delete_ordered | (no verdict: autotest did not finish) | 0 tests passed 0 tests failed  3 tests could not be run
-lists_diagonal | (no verdict: autotest did not finish) | 0 tests passed 0 tests failed  5 tests could not be run
-musical_chairs | (no verdict: autotest did not finish) | 0 tests passed 0 tests failed  3 tests could not be run
-street_fighter | (no verdict: autotest did not finish) | 0 tests passed 0 tests failed  5 tests could not be run
-x | (no verdict: autotest did not finish) | 0 tests passed 0 tests failed  2 tests could not be run
 rain | 0 tests passed 68 tests failed | 0 tests passed 0 tests failed  68 tests could not be run
 reverse_file_bytes | 3 tests passed 4 tests failed | 4 tests passed 3 tests failed
 unique_files | (no verdict: autotest did not finish) | 8 tests passed 0 tests failed 
