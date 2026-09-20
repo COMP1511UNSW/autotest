@@ -925,6 +925,24 @@ PARAMETER_LIST += [
         """,
     ),
     Parameter(
+        "report_resource_usage",
+        default=False,
+        description="""
+            If true, autotest measures what each test cost and prints a table
+            after the results.  The command-line option is **`--stats`**.<br>
+            Peak memory is the largest total autotest saw across the test's
+            whole process group, which is the same quantity **`max_rss_bytes`**
+            is enforced against, so a number in this table can be pasted into
+            a specification.<br>
+            It is sampled five times a second, so a test which allocates and
+            exits between two samples reports less than it used, and a test
+            shorter than a fifth of a second reports 0.<br>
+            CPU time is not reported: the only ways to obtain it here are
+            process-wide, and would attribute other tests' work to this one
+            when tests run concurrently.
+        """,
+    ),
+    Parameter(
         "max_rss_bytes",
         default=1000000000,
         description="""

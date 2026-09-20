@@ -48,7 +48,7 @@ def process_arguments():
     return args, tests, parameters
 
 
-def parse_arguments():
+def parse_arguments():  # noqa: PLR0915 - one statement per command-line option
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter, epilog=EXTRA_HELP
     )
@@ -104,6 +104,11 @@ def parse_arguments():
         type=int,
         metavar="N",
         help="run N tests concurrently (sets parameter parallel_tests, 0 = one per CPU)",
+    )
+    parser.add_argument(
+        "--stats",
+        action="store_true",
+        help="print what each test cost: peak memory and wall clock (sets parameter report_resource_usage)",
     )
     parser.add_argument(
         "--no_sandbox",
@@ -164,6 +169,8 @@ def parse_arguments():
         args.initial_parameters["parallel_tests"] = args.jobs
     if args.no_sandbox:
         args.initial_parameters["sandbox"] = False
+    if args.stats:
+        args.initial_parameters["report_resource_usage"] = True
 
     if args.debug:
         print("raw args:", args, file=sys.stderr)

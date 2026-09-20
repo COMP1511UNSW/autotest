@@ -99,8 +99,9 @@ def run(  # noqa: C901, PLR0912 - the argument checks, Popen and the result tran
     max_stderr_bytes: int | None = 10000,
     nice: int = 0,
     debug: int = 0,
+    report_resource_usage: bool = False,
     **_ignored_parameters: object,
-) -> tuple[bytes, bytes, int]:
+) -> CommandResult:
     """Run command and return (stdout, stderr, returncode).
 
     command is a string run by bash (or /bin/sh) or a list executed directly.
@@ -124,6 +125,11 @@ def run(  # noqa: C901, PLR0912 - the argument checks, Popen and the result tran
 
     returncode follows Popen: negative signal number when killed by a signal,
     so a process we killed reports -9.  It is never None.
+
+    With report_resource_usage the result carries .usage, a ResourceUsage.
+    Measuring costs a walk of /proc every _MEMORY_POLL_SECONDS, which is why
+    it is off unless asked for (and already paid for when max_rss_bytes is
+    being enforced).
 
     Extra keyword parameters are ignored so callers may pass a whole test's
     parameter dictionary.
@@ -186,13 +192,14 @@ def run(  # noqa: C901, PLR0912 - the argument checks, Popen and the result tran
             message = re.sub(r"^\[.*?\] *", "", str(e))
             if debug > 1:
                 print("run failed:", message, file=sys.stderr)
-            return (b"", (message + "\n").encode("UTF-8"), 2)
+            return CommandResult(b"", (message + "\n").encode("UTF-8"), 2)
         except subprocess.SubprocessError as e:
             # an exception escaped prepare_child() in the child
             from util import InternalError
 
             raise InternalError(f"could not run {argv}: {e}") from e
 
+        started = time.monotonic()
         output = _supervise(
             process,
             max_real_seconds,
@@ -200,7 +207,9 @@ def run(  # noqa: C901, PLR0912 - the argument checks, Popen and the result tran
             max_stderr_bytes,
             max_rss_bytes,
             debug,
+            report_resource_usage,
         )
+        real_seconds = time.monotonic() - started
     finally:
         if not isinstance(stdin_file, int):  # i.e. not subprocess.DEVNULL
             stdin_file.close()
@@ -219,9 +228,16 @@ def run(  # noqa: C901, PLR0912 - the argument checks, Popen and the result tran
         if failure and returncode == _SANDBOX_FAILED_STATUS:
             raise _sandbox_error_class()(failure)
         if failure and returncode == _COMMAND_NOT_FOUND_STATUS:
-            return (b"", (failure + "\n").encode("UTF-8"), 2)
+            return CommandResult(b"", (failure + "\n").encode("UTF-8"), 2)
 
-    result = (bytes(output.stdout), bytes(output.stderr), returncode)
+    usage = (
+        ResourceUsage(output.peak_rss_bytes, real_seconds)
+        if report_resource_usage
+        else None
+    )
+    result = CommandResult(
+        bytes(output.stdout), bytes(output.stderr), returncode, usage
+    )
     if debug > 1:
         print("run returned", result, file=sys.stderr)
     return result
@@ -387,6 +403,8 @@ class _Output:
         self.real_time_exceeded = False
         # set once the process group has been killed by us for any reason
         self.killed = False
+        # the largest total the sampler saw, when it was asked to measure
+        self.peak_rss_bytes = 0
 
 
 def _pipes(process: subprocess.Popen[bytes]) -> tuple[IO[bytes], IO[bytes]]:
@@ -398,6 +416,61 @@ def _pipes(process: subprocess.Popen[bytes]) -> tuple[IO[bytes], IO[bytes]]:
     return cast(IO[bytes], process.stdout), cast(IO[bytes], process.stderr)
 
 
+class ResourceUsage:
+    """
+    What a command cost, measured rather than estimated.
+
+    peak_rss_bytes is the largest total the sampler saw across the command's
+    whole process group -- the same quantity max_rss_bytes is enforced
+    against, so a number reported here can be pasted into a specification.
+    It is sampled every _MEMORY_POLL_SECONDS, so a command which allocates
+    and exits between two samples reports less than it used; a command
+    shorter than one interval reports 0.
+
+    CPU time is deliberately absent.  getrusage(RUSAGE_CHILDREN) is
+    process-wide, so with tests on a thread pool it would report other
+    tests' work as this one's, and taking it from wait4 means owning the
+    reaping that Popen does here.  Wall clock is what this can measure
+    honestly.
+    """
+
+    __slots__ = ("peak_rss_bytes", "real_seconds")
+
+    def __init__(self, peak_rss_bytes: int = 0, real_seconds: float = 0.0):
+        self.peak_rss_bytes = peak_rss_bytes
+        self.real_seconds = real_seconds
+
+    def __repr__(self) -> str:
+        return (
+            f"ResourceUsage(peak_rss_bytes={self.peak_rss_bytes},"
+            f" real_seconds={self.real_seconds:.3f})"
+        )
+
+
+class CommandResult(tuple[bytes, bytes, int]):
+    """
+    (stdout, stderr, returncode), with what the command cost attached.
+
+    A tuple subclass, so every caller that unpacks three values -- which is
+    all of them -- is unchanged, while a caller which asked to measure reads
+    .usage.  Returning a fourth element instead would have broken each of
+    them.
+    """
+
+    usage: ResourceUsage | None
+
+    def __new__(
+        cls,
+        stdout: bytes,
+        stderr: bytes,
+        returncode: int,
+        usage: ResourceUsage | None = None,
+    ) -> CommandResult:
+        result = super().__new__(cls, (stdout, stderr, returncode))
+        result.usage = usage
+        return result
+
+
 def _supervise(
     process: subprocess.Popen[bytes],
     max_real_seconds: int | None,
@@ -405,6 +478,7 @@ def _supervise(
     max_stderr_bytes: int | None,
     max_rss_bytes: int | None,
     debug: int,
+    measure_memory: bool = False,
 ) -> _Output:
     """Collect the child's output, enforce the wall-clock limit and reap it.
 
@@ -427,6 +501,7 @@ def _supervise(
             max_stdout_bytes,
             max_stderr_bytes,
             max_rss_bytes,
+            measure_memory,
         )
         # Both pipes are closed but the child may still be running (it can
         # close its own output), so the wall clock applies to its exit too.
@@ -460,19 +535,25 @@ class _MemorySampler:
     the tests in parallel saved.
     """
 
-    def __init__(self, max_rss_bytes: int | None):
+    def __init__(self, max_rss_bytes: int | None, measure: bool = False):
         self.limit = max_rss_bytes
+        # sampling costs a walk of /proc, so it happens only when a limit
+        # has to be enforced or the caller asked for the number
+        self.sampling = bool(max_rss_bytes) or measure
         self.next_poll = time.monotonic() + _MEMORY_POLL_SECONDS
+        self.peak = 0
 
     def exceeded(self, pgid: int) -> bool:
         """True iff it is time to look and the group is over its limit."""
-        if not self.limit:
+        if not self.sampling:
             return False
         now = time.monotonic()
         if now < self.next_poll:
             return False
         self.next_poll = now + _MEMORY_POLL_SECONDS
-        return _process_group_rss(pgid) > self.limit
+        rss = _process_group_rss(pgid)
+        self.peak = max(self.peak, rss)
+        return self.limit is not None and self.limit > 0 and rss > self.limit
 
 
 def _collect_output(  # noqa: C901 - one branch per way a command is stopped: output, memory, wall clock
@@ -484,6 +565,7 @@ def _collect_output(  # noqa: C901 - one branch per way a command is stopped: ou
     max_stdout_bytes: int | None,
     max_stderr_bytes: int | None,
     max_rss_bytes: int | None,
+    measure_memory: bool = False,
 ) -> None:
     """Read stdout and stderr until both close, a stream overflows, the
     process group uses too much memory, or the wall clock runs out.
@@ -499,7 +581,7 @@ def _collect_output(  # noqa: C901 - one branch per way a command is stopped: ou
     selector = selectors.DefaultSelector()
     for fd in streams:
         selector.register(fd, selectors.EVENT_READ)
-    sampler = _MemorySampler(max_rss_bytes)
+    sampler = _MemorySampler(max_rss_bytes, measure_memory)
     try:
         while selector.get_map():
             timeout = None
@@ -507,7 +589,7 @@ def _collect_output(  # noqa: C901 - one branch per way a command is stopped: ou
                 timeout = min(
                     max(0.0, deadline - time.monotonic()), _MAX_SELECT_SECONDS
                 )
-            if max_rss_bytes:
+            if sampler.sampling:
                 # a program that allocates without printing produces no
                 # readable event, so the wait is capped to keep sampling
                 timeout = min(
@@ -537,6 +619,7 @@ def _collect_output(  # noqa: C901 - one branch per way a command is stopped: ou
                 _real_time_exceeded(output, pgid, max_real_seconds)
                 return
     finally:
+        output.peak_rss_bytes = sampler.peak
         selector.close()
 
 

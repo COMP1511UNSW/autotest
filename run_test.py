@@ -100,6 +100,9 @@ class CommandRunner:
                 max_open_files=0,
                 max_stdout_bytes=SUPPORT_COMMAND_MAX_OUTPUT_BYTES,
                 max_stderr_bytes=SUPPORT_COMMAND_MAX_OUTPUT_BYTES,
+                # --stats reports what a TEST cost; a compiler's memory is
+                # not something a specification author can act on
+                report_resource_usage=False,
             )
         if not self.sandboxed(parameters, support_command):
             return run(**run_parameters)
@@ -195,9 +198,12 @@ class _Test:
         self.work_dir = work_dir
         self.runner = runner or CommandRunner(None, os.path.dirname(work_dir))
 
-        stdout, stderr, self.returncode = self.runner.run(
+        result = self.runner.run(
             self.command, self.parameters, work_dir, self.parameters["environment"]
         )
+        stdout, stderr, self.returncode = result
+        # None unless report_resource_usage asked for it: see --stats
+        self.resource_usage = getattr(result, "usage", None)
 
         if self.parameters["unicode_stdout"]:
             self.stdout = codecs.decode(stdout, "UTF-8", errors="replace")

@@ -92,6 +92,8 @@ class TestOutcome:
         self.short_explanation: Optional[str] = ""
         self.long_explanation = ""
         self.test_dir: Optional[str] = None
+        # what the test cost, when report_resource_usage asked: see --stats
+        self.resource_usage: Any = None
 
 
 class RunContext:
@@ -379,6 +381,9 @@ def run_tests(
         return 1
 
     results = run_tests_concurrently(context, tests_to_run)
+
+    if context.parameters.get("report_resource_usage"):
+        print_resource_usage(context, tests_to_run)
 
     if debug > 1 and context.sandbox_notes:
         print("sandbox notes:", "; ".join(context.sandbox_notes), file=sys.stderr)
@@ -926,6 +931,15 @@ def execute_test(  # noqa: C901, PLR0912, PLR0915 - one branch per stage of runn
         outcome.test_passed = not failed_individual_tests
         outcome.stdout = individual_tests[0].stdout
         outcome.stderr = individual_tests[0].stderr
+        # the largest of the compile commands' runs: a test run once per
+        # compile command costs the most that any one of them did
+        usages = [
+            it.resource_usage
+            for it in individual_tests
+            if it.resource_usage is not None
+        ]
+        if usages:
+            outcome.resource_usage = max(usages, key=lambda u: u.peak_rss_bytes)
 
         if failed_individual_tests:
             # pick the best failed test to report
@@ -950,6 +964,41 @@ def execute_test(  # noqa: C901, PLR0912, PLR0915 - one branch per stage of runn
             shutil.rmtree(test_dir, ignore_errors=True)
 
 
+def print_resource_usage(context: RunContext, tests_to_run: list[_Test]) -> None:
+    """
+    Print what each test cost, after its results (see --stats).
+
+    Setting max_rss_bytes for the eight COMP1521 activities that need more
+    than the default took an afternoon of instrumenting mipsy by hand.  The
+    number was being measured the whole time and thrown away.
+    """
+    measured: list[tuple[_Test, Any]] = [
+        (t, usage)
+        for t in tests_to_run
+        if (usage := getattr(t, "resource_usage", None)) is not None
+    ]
+    if not measured:
+        return
+    file = context.file
+    print(file=file)
+    print(
+        f"{'test':<24} {'peak memory':>14} {'wall clock':>11}",
+        file=file,
+    )
+    for test, usage in measured:
+        label = str(test.parameters["label"])[:24]
+        print(
+            f"{label:<24} {usage.peak_rss_bytes:>14,} {usage.real_seconds:>10.2f}s",
+            file=file,
+        )
+    peak = max(u.peak_rss_bytes for _t, u in measured)
+    print(
+        f"{'(largest)':<24} {peak:>14,}",
+        file=file,
+        flush=True,
+    )
+
+
 def report_outcome(context: RunContext, test: _Test, outcome: TestOutcome) -> int:
     """
     print a test's result (main thread, in test order) and record it on the
@@ -966,6 +1015,7 @@ def report_outcome(context: RunContext, test: _Test, outcome: TestOutcome) -> in
     test.test_passed = outcome.test_passed
     test.stdout = outcome.stdout
     test.stderr = outcome.stderr
+    test.resource_usage = outcome.resource_usage
     if outcome.status == 1:
         print(colored("passed", "green"), flush=True, file=file)
         return 1
@@ -1368,6 +1418,9 @@ def print_expected_output(
             # expected output for any exercise that needs more -- every MIPS
             # game among them
             test.parameters["max_rss_bytes"] = 0
+            # -g returns before the summary is printed, so measuring would be
+            # a walk of /proc five times a second for nothing
+            test.parameters["report_resource_usage"] = False
             # override dcc output checking
             finalize_dcc_output_checking("dcc_output_checking", False, test.parameters)
 

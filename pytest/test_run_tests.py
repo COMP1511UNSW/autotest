@@ -833,3 +833,60 @@ def test_a_sparse_file_ending_in_a_hole_keeps_its_size(tmp_path):
 
     assert destination.stat().st_size == source.stat().st_size
     assert destination.read_bytes() == source.read_bytes()
+
+
+STATS_SPEC = (
+    "files=a.sh\nprogram=./a.sh\nmax_rss_bytes=0\nmax_real_seconds=30\n"
+    '1 command="./a.sh" expected_stdout=""\n'
+)
+STATS_SH = (
+    "#!/bin/sh\n"
+    "exec python3 -c '\n"
+    "import time\n"
+    "b = bytearray(120 * 1024 * 1024)\n"
+    "time.sleep(0.6)\n"
+    "'\n"
+)
+
+
+def test_stats_reports_what_a_test_cost(tmp_path, make_exercise, run_autotest):
+    """
+    --stats prints the number autotest was already measuring and discarding.
+
+    Setting max_rss_bytes for the eight COMP1521 activities that need more
+    than the default took an afternoon of instrumenting mipsy by hand.
+    """
+    exercise = make_exercise(tmp_path, STATS_SPEC, files={"a.sh": STATS_SH})
+    stdout, stderr, status = run_autotest(exercise.args + ["--no_sandbox", "--stats"])
+    assert status == 0, stdout + stderr
+    assert "peak memory" in stdout, stdout
+    lines = stdout.splitlines()
+    table = lines[lines.index(next(x for x in lines if "peak memory" in x)) + 1 :]
+    peak = int(table[0].split()[1].replace(",", ""))
+    assert peak > 100 * 1024 * 1024, stdout
+
+
+def test_stats_prints_nothing_unless_it_is_asked_for(
+    tmp_path, make_exercise, run_autotest
+):
+    exercise = make_exercise(tmp_path, STATS_SPEC, files={"a.sh": STATS_SH})
+    stdout, stderr, status = run_autotest(exercise.args + ["--no_sandbox"])
+    assert status == 0, stdout + stderr
+    assert "peak memory" not in stdout, stdout
+
+
+def test_generate_expected_output_does_not_pay_to_measure(
+    tmp_path, make_exercise, run_autotest
+):
+    """
+    -g returns before the summary, so measuring would be pure cost.
+
+    Sampling caps the supervisor's select timeout, so leaving it on makes
+    every -g command walk /proc five times a second and print nothing.
+    """
+    exercise = make_exercise(tmp_path, STATS_SPEC, files={"a.sh": STATS_SH})
+    stdout, stderr, status = run_autotest(
+        exercise.args + ["--no_sandbox", "--stats", "-g", "outputs_only"]
+    )
+    assert status == 0, stdout + stderr
+    assert "peak memory" not in stdout, stdout

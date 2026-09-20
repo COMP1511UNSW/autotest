@@ -563,3 +563,53 @@ def test_memory_limit_counts_what_the_test_forks():
     )
     assert b"memory limit" in stderr, (stdout, stderr, returncode)
     assert returncode == -signal.SIGKILL
+
+
+def test_resource_usage_sums_the_whole_process_group():
+    """
+    The peak reported is the group's, which is what max_rss_bytes enforces.
+
+    This is the shape that tells the two candidate implementations apart.
+    wait4's ru_maxrss would report the largest SINGLE child -- and would
+    include autotest's own resident memory, because Popen forks a copy of
+    the interpreter and the child inherits its high-water mark. Summing the
+    group is the only number a spec author can paste into max_rss_bytes.
+    """
+    child = (
+        f"{sys.executable} -c "
+        + shlex.quote("import time; b = bytearray(150 * 1024 * 1024); time.sleep(1)")
+        + " &"
+    )
+    stdout, stderr, returncode = run(
+        child * 3 + " wait",
+        max_rss_bytes=0,
+        max_real_seconds=60,
+        report_resource_usage=True,
+    )
+    assert returncode == 0, (stdout, stderr)
+    result = run(
+        child * 3 + " wait",
+        max_rss_bytes=0,
+        max_real_seconds=60,
+        report_resource_usage=True,
+    )
+    # three concurrent 150MB children: a per-process figure could not reach
+    # 300MB however it was measured
+    assert result.usage is not None
+    assert result.usage.peak_rss_bytes > 300 * 1024 * 1024, result.usage
+    assert result.usage.real_seconds > 0.5
+
+
+def test_resource_usage_is_not_measured_unless_it_is_asked_for():
+    """Measuring costs a walk of /proc five times a second."""
+    result = run([sys.executable, "-c", "pass"], max_rss_bytes=0, max_real_seconds=30)
+    assert result.usage is None
+
+
+def test_the_result_is_still_a_three_element_tuple():
+    """Every existing caller unpacks three values; that must keep working."""
+    result = run(["echo", "hi"], max_real_seconds=30, report_resource_usage=True)
+    stdout, stderr, returncode = result
+    assert (stdout, stderr, returncode) == (b"hi\n", b"", 0)
+    assert len(result) == 3
+    assert result == (b"hi\n", b"", 0)
