@@ -115,10 +115,55 @@ def test_config_from_parameters_defaults():
         }
     )
     assert config.network is False
-    assert config.read_only_mounts == ["/usr", "/opt/extra"]
+    # the resolver's file is added by _resolver_mounts on a host where
+    # /etc/resolv.conf is a link out of the mounted directories
+    assert config.read_only_mounts[:2] == ["/usr", "/opt/extra"]
     assert config.read_write_mounts == ["/scratch"]
     assert (config.tmp_bytes, config.shm_bytes) == (1, 2)
     assert config.seccomp is False and config.landlock is False
+
+
+def test_leaving_the_network_on_mounts_the_resolver_configuration(monkeypatch):
+    """
+    /etc/resolv.conf is a link to a file outside the mounted directories
+    wherever a local resolver maintains it, so inside the sandbox it dangles
+    and every name lookup fails.  An exercise whose specification asked for
+    the network then gets one it can not use: four COMP2041 activities did.
+    """
+    monkeypatch.setattr(
+        os.path, "realpath", lambda _p: "/run/systemd/resolve/stub-resolv.conf"
+    )
+    monkeypatch.setattr(os.path, "exists", lambda _p: True)
+    parameters = {"sandbox_read_only_mount_base": ["/usr", "/etc"]}
+
+    config = sandbox.config_from_parameters({**parameters, "sandbox_network": False})
+    assert config.read_only_mounts == [
+        "/usr",
+        "/etc",
+        "/run/systemd/resolve/stub-resolv.conf",
+    ]
+
+    # an isolated network has nothing to resolve with, so nothing is added
+    config = sandbox.config_from_parameters({**parameters, "sandbox_network": True})
+    assert config.read_only_mounts == ["/usr", "/etc"]
+
+
+def test_the_resolver_configuration_is_not_mounted_twice(monkeypatch):
+    """A host which already mounts the link's target, or whose
+    /etc/resolv.conf is a file rather than a link, gains nothing."""
+    monkeypatch.setattr(os.path, "exists", lambda _p: True)
+
+    monkeypatch.setattr(os.path, "realpath", lambda _p: "/run/resolv.conf")
+    config = sandbox.config_from_parameters(
+        {"sandbox_network": False, "sandbox_read_only_mount_base": ["/usr", "/run"]}
+    )
+    assert config.read_only_mounts == ["/usr", "/run"]
+
+    monkeypatch.setattr(os.path, "realpath", lambda _p: "/etc/resolv.conf")
+    config = sandbox.config_from_parameters(
+        {"sandbox_network": False, "sandbox_read_only_mount_base": ["/usr"]}
+    )
+    assert config.read_only_mounts == ["/usr"]
 
 
 def test_probe_failure_without_a_namespace_denial_gets_no_advice():

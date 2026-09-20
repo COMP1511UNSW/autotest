@@ -168,6 +168,31 @@ def test_sandbox_network_false_shows_the_host_interfaces(
     assert interfaces > 3
 
 
+def test_sandbox_network_false_can_resolve_a_name(
+    tmp_path, make_exercise, run_autotest
+):
+    """
+    A network the test can not look a name up on is not a network.
+
+    /etc/resolv.conf is a link out of the mounted directories wherever a
+    local resolver maintains it, and the link dangles inside the sandbox
+    unless its target is mounted too.
+    """
+    if os.path.realpath("/etc/resolv.conf") == "/etc/resolv.conf":
+        pytest.skip("this host's /etc/resolv.conf is a file, so nothing can dangle")
+    stdout, stderr, status = run(
+        make_exercise,
+        run_autotest,
+        tmp_path,
+        spec(
+            {"sandbox_network": "False"},
+            "cat /etc/resolv.conf >/dev/null && echo readable",
+            "readable\\n",
+        ),
+    )
+    assert status == 0, stdout + stderr
+
+
 # ---- private /tmp and /dev/shm
 
 

@@ -551,6 +551,30 @@ class SandboxConfig:
         return f"SandboxConfig({self.__dict__!r})"
 
 
+def _resolver_mounts(read_only: Iterable[object]) -> list[str]:
+    """The extra paths a name lookup needs when the network is left on.
+
+    /etc/resolv.conf is a symbolic link wherever a local resolver maintains
+    it: to /run/systemd/resolve/stub-resolv.conf under systemd-resolved, to
+    /mnt/wsl/resolv.conf under WSL.  Neither target is in
+    sandbox_read_only_mount_base, so inside the sandbox the link dangles and
+    every name lookup fails -- an exercise which asked for the network with
+    sandbox_network=False gets one it can not use.  COMP2041's shell_courses,
+    python_courses_requests, python_courses_subprocess and regex_json all
+    failed that way, while curl to a bare address worked.
+
+    Only the link's target is added, and only when nothing already mounted
+    covers it, so the sandbox gains one read-only file and nothing else.
+    """
+    target = os.path.realpath("/etc/resolv.conf")
+    if target == "/etc/resolv.conf" or not os.path.exists(target):
+        return []
+    for host, _inside in _normalise_mounts(read_only, "sandbox_read_only_mount"):
+        if target == host or target.startswith(host.rstrip("/") + "/"):
+            return []
+    return [target]
+
+
 def config_from_parameters(parameters: Mapping[str, Any]) -> SandboxConfig:
     """Build a SandboxConfig from a test's parameter dictionary.
 
@@ -561,8 +585,11 @@ def config_from_parameters(parameters: Mapping[str, Any]) -> SandboxConfig:
     read_only = list(
         parameters.get("sandbox_read_only_mount_base", DEFAULT_READ_ONLY_MOUNT_BASE)
     ) + list(parameters.get("sandbox_read_only_mount", []))
+    network = parameters.get("sandbox_network", True)
+    if not network:
+        read_only += _resolver_mounts(read_only)
     return SandboxConfig(
-        network=parameters.get("sandbox_network", True),
+        network=network,
         read_only_mounts=read_only,
         read_write_mounts=list(parameters.get("sandbox_read_write_mount", [])),
         tmp_bytes=parameters.get("sandbox_tmp_bytes", DEFAULT_TMP_BYTES),
