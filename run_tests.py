@@ -140,6 +140,9 @@ class RunContext:
         # support commands (checkers, compilers, ...) run once per distinct
         # command line however many tests share it
         self.support_command_results: dict[str, bool] = {}
+        # one lock per command line, so the second caller waits for the first
+        # to finish rather than running the command a second time
+        self.support_command_locks: dict[str, threading.Lock] = {}
         self.chmod_done: set = set()
         # the program link in the shared directory (see prepare_test)
         self.linked_program: dict[str, str] = {}
@@ -211,7 +214,7 @@ class RunContext:
             or name.startswith((SANDBOX_ROOT_PREFIX, TEST_DIRECTORY_PREFIX))
         ]
 
-    def run_support_command(  # noqa: C901 - one branch per kind of support command
+    def run_support_command(
         self,
         command: Union[list[str], str],
         parameters: dict[str, Any],
@@ -254,17 +257,56 @@ class RunContext:
             cmd_str = " ".join(cmd)
 
         if cache:
+            # The command's own lock is held across running it, not just
+            # across looking it up: checking the cache, running, and storing
+            # the result was three steps, so every worker that reached the
+            # first step before anyone reached the third ran the command too.
+            with self.lock:
+                cached = self.support_command_results.get(cmd_str)
+                command_lock = self.support_command_locks.setdefault(
+                    cmd_str, threading.Lock()
+                )
+            if cached is None:
+                with command_lock:
+                    return self._run_support_command_once(
+                        cmd, cmd_str, parameters, work_dir, out, unlink, print_command
+                    )
+            if self.debug > 1:
+                print(
+                    "Using cached result of",
+                    cached,
+                    "for",
+                    cmd_str,
+                    file=sys.stderr,
+                )
+            return cached
+
+        return self._run_support_command_once(
+            cmd, cmd_str, parameters, work_dir, out, unlink, print_command, cache=False
+        )
+
+    def _run_support_command_once(
+        self,
+        cmd: Union[list[str], str],
+        cmd_str: str,
+        parameters: dict[str, Any],
+        work_dir: str,
+        out,
+        unlink: Optional[str],
+        print_command: bool,
+        cache: bool = True,
+    ) -> bool:
+        """
+        run the command and record its result
+
+        Called with the command's own lock held when the result is cached, so
+        whoever waited for that lock re-checks the cache first and does not
+        run it again.
+        """
+        if cache:
             with self.lock:
                 cached = self.support_command_results.get(cmd_str)
             if cached is not None:
-                if self.debug > 1:
-                    print(
-                        "Using cached result of",
-                        cached,
-                        "for",
-                        cmd_str,
-                        file=sys.stderr,
-                    )
                 return cached
 
         if unlink:
@@ -469,6 +511,10 @@ def run_tests_concurrently(context: RunContext, tests_to_run: list[_Test]) -> li
     ] = []
     for index, test in enumerate(tests_to_run):
         out = io.StringIO()
+        outcome = check_one_test(context, test, out)
+        if outcome is not None:
+            prepared.append((test, [], out, outcome, None))
+            continue
         if prefixes is not None:
             prepared.append((test, [], out, None, prefixes[index]))
             continue
@@ -513,12 +559,41 @@ def run_tests_concurrently(context: RunContext, tests_to_run: list[_Test]) -> li
     return results
 
 
+def check_one_test(
+    context: RunContext, test: _Test, out: io.StringIO
+) -> Optional[TestOutcome]:
+    """
+    run the test's checkers, in the shared directory, before anything else
+
+    return a TestOutcome iff a checker failed and the test can not be run
+    """
+    parameters = test.parameters
+    glob_lists = [glob.glob(g) for g in test.files]
+    test_files = [item for sublist in glob_lists for item in sublist]
+    if run_checkers(context, test_files, parameters, out):
+        return None
+    print(
+        f"Test {parameters['label']} ({parameters['description']}) - "
+        + context.colored("could not be run"),
+        "because",
+        context.colored("check failed", "red"),
+        flush=True,
+        file=out,
+    )
+    return TestOutcome(-1, out.getvalue())
+
+
 def run_one_test(context: RunContext, test: _Test) -> int:
     """
     run one test from start to finish, printing its result
     return -1 for test not run, 0 for test failed, 1 for test passed
     """
     out = io.StringIO()
+    outcome = check_one_test(context, test, out)
+    if outcome is not None:
+        status = report_outcome(context, test, outcome)
+        remove_test_directory(context, outcome)
+        return status
     test_files, outcome = prepare_test(context, test, out)
     if outcome is None:
         outcome = execute_test(context, test, test_files, out)
@@ -550,9 +625,9 @@ def prepare_test(
     glob_lists = [glob.glob(g) for g in test.files]
     test_files = [item for sublist in glob_lists for item in sublist]
 
-    if not run_checkers_pre_compile_command(
-        context, test_files, parameters, out, directory
-    ):
+    # checkers have already run, in the shared directory, before any test
+    # started: see run_checkers and check_every_test
+    if not run_pre_compile_command(context, parameters, out, directory):
         print(
             not_run_description,
             "because",
@@ -906,20 +981,25 @@ def remove_test_directory(context: RunContext, outcome: TestOutcome) -> None:
         outcome.test_dir = None
 
 
-def run_checkers_pre_compile_command(
+def run_checkers(
     context: RunContext,
     test_files: list[str],
     parameters: dict[str, Any],
     out,
-    directory: str = "",
 ) -> bool:
     """
-    run any checkers specified for the files in the test
-    plus any pre_compile_command
-    if they haven't been run before
-    return False iff any checker fails, True otherwise
+    run any checkers specified for the files in the test, if they have not
+    been run before; return False iff one fails
+
+    Always in the shared directory, and always before any test starts, so
+    that each distinct checker runs exactly once and its output lands in the
+    same test's block whatever else is happening.  A checker inspects a
+    submitted file and its verdict does not depend on which copy of the
+    directory it is looking at, so there is nothing to gain by running it
+    once per test -- and a great deal to lose: COMP1521's pacman ran
+    "1521 mipsy --check pacman.s" 140 times under -j where a serial run ran
+    it once, and printed it 140 times.
     """
-    directory = directory or context.shared_dir
     for checker in parameters["checkers"]:
         if not checker:
             continue
@@ -927,13 +1007,23 @@ def run_checkers_pre_compile_command(
             if not context.run_support_command(
                 checker,
                 parameters,
-                directory,
+                context.shared_dir,
                 out,
                 arguments=[filename],
                 print_command=True,
             ):
                 return False
+    return True
 
+
+def run_pre_compile_command(
+    context: RunContext,
+    parameters: dict[str, Any],
+    out,
+    directory: str = "",
+) -> bool:
+    """run the test's pre_compile_command in directory, if it has one"""
+    directory = directory or context.shared_dir
     pre_compile_command = parameters["pre_compile_command"]
     if pre_compile_command:
         # cached only while every test prepares in the one shared directory:

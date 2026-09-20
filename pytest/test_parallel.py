@@ -313,3 +313,50 @@ def test_shared_test_directory_prepares_one_test_at_a_time(run_autotest, tmp_pat
     )
     assert "2 tests passed 0 tests failed" in stdout, stdout
     assert status == 0
+
+
+def test_a_checker_runs_once_however_many_tests_run_at_once(run_autotest, tmp_path):
+    """
+    A cached support command runs once, whether tests run serially or not.
+
+    Checking the cache, running the command and storing the result were three
+    steps with no lock across them, so every worker that looked before anyone
+    stored ran the command too.  Replaying COMP1521 with -j found it: pacman
+    ran "1521 mipsy --check pacman.s" once per test where a serial run ran it
+    once, and printed all 140 of them.
+
+    The checker appends a line per run to a file outside the test tree, so
+    that file counts the runs.
+    """
+    counted = tmp_path / "counted.txt"
+    spec = tmp_path / "spec"
+    spec.mkdir()
+    # two distinct pre_compile_commands, so every test prepares in its own
+    # directory on a worker thread -- which is where the checker was racing
+    tests = "".join(
+        f'{n} pre_compile_command="true {n % 2}"\n'
+        f'{n} command="true" expected_stdout=""\n'
+        for n in range(1, 25)
+    )
+    (spec / "tests.txt").write_text(
+        "files=show.sh\n"
+        "program=./show.sh\n"
+        f'checkers=[["sh", "-c", "echo ran >> {counted}"]]\n' + tests
+    )
+    submission = tmp_path / "sub"
+    submission.mkdir()
+    show = submission / "show.sh"
+    show.write_text("#!/bin/sh\n")
+    show.chmod(0o700)
+
+    for extra in ([], ["-j", "8"]):
+        counted.write_text("")
+        stdout, _stderr, status = run_autotest(
+            ["-D", str(submission), "-a", str(spec), "--no_sandbox", *extra]
+        )
+        assert "24 tests passed 0 tests failed" in stdout, (extra, stdout)
+        assert status == 0
+        runs = counted.read_text().count("ran")
+        assert runs == 1, (extra, runs)
+        # and its output is shown once, in one test's block
+        assert stdout.count("echo ran") == 1, (extra, stdout)
