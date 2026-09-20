@@ -59,6 +59,7 @@ if __name__ == "__main__":
 from command_line_arguments import REPO_INFORMATION, process_arguments
 from copy_files_to_temp_directory import copy_files_to_temp_directory
 from helper import run_helper
+from lint_specification import lint
 from run_tests import (
     generate_expected_output,
     run_tests,
@@ -165,6 +166,19 @@ def run_autotest():
             )
         )
         return 0
+
+    if args.lint:
+        # before anything is copied: nothing is created, nothing is run, so
+        # this is safe to loop over a whole course tree
+        return (
+            1
+            if lint(
+                tests,
+                parameters["supplied_files_directory"],
+                args.test_specification_pathname,
+            )
+            else 0
+        )
 
     copy_files_to_temp_directory(args, parameters)
 

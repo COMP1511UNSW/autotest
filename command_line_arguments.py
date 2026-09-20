@@ -32,6 +32,8 @@ def process_arguments():
     args = parse_arguments()
 
     test_specification_pathname = find_test_specification(args)
+    # kept so --lint can name the file its findings are about
+    args.test_specification_pathname = test_specification_pathname
     tests_as_dicts, parameters = parse_file(
         test_specification_pathname,
         initial_parameters=args.initial_parameters,
@@ -104,6 +106,11 @@ def parse_arguments():  # noqa: C901, PLR0915 - one branch and one statement per
         type=int,
         metavar="N",
         help="run N tests concurrently (sets parameter parallel_tests, 0 = one per CPU)",
+    )
+    parser.add_argument(
+        "--lint",
+        action="store_true",
+        help="check the test specification and report what is wrong with it, without running any test",
     )
     parser.add_argument(
         "--json",
