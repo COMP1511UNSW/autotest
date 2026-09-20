@@ -30,6 +30,16 @@
 #                   each test gets its own copy of its directory, and a
 #                   small tmpfs will fail with ENOSPC and look like a defect.
 #   REPLAY_ARGS     extra arguments for the new tree only, e.g. --no_sandbox
+#   REPLAY_OLD_ARGS extra arguments for the old tree only.  Give both trees
+#                   the same directory and only one of these to measure one
+#                   setting rather than one version: --no_sandbox here and
+#                   nothing there attributes every difference to the sandbox.
+#
+# The sandbox makes only system directories visible, so a compiler installed
+# somewhere else -- under $HOME, say -- is not reachable inside it and every
+# activity fails to compile.  Name its directory in sandbox_read_only_mount:
+#
+#   REPLAY_ARGS="-P sandbox_read_only_mount=['/path/to/tools']"
 #
 # MEMORY. This is the expensive part of replaying a whole course, and running it
 # unbounded took a 30GB machine down. Each concurrent activity may compile with
@@ -76,6 +86,7 @@ done
 }
 jobs=${REPLAY_JOBS:-4}
 extra_args=${REPLAY_ARGS:-}
+old_extra_args=${REPLAY_OLD_ARGS:-}
 work=${REPLAY_TMPDIR:-${TMPDIR:-/tmp}}/autotest-replay.$$
 mkdir -p "$work/old" "$work/new" || exit 1
 
@@ -147,7 +158,7 @@ export -f run_one
 export work python
 
 xargs -a "$activities" -P "$jobs" -I{} \
-	bash -c 'run_one "$0" "{}" "$1" "$2"' "$old_tree" "$work/old" "" \
+	bash -c 'run_one "$0" "{}" "$1" "$2"' "$old_tree" "$work/old" "$old_extra_args" \
 	>/dev/null 2>&1
 xargs -a "$activities" -P "$jobs" -I{} \
 	bash -c 'run_one "$0" "{}" "$1" "$2"' "$new_tree" "$work/new" "$extra_args" \
