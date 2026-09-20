@@ -366,3 +366,30 @@ def test_output_is_not_coloured_when_stdout_is_not_a_terminal(
     assert status == 1
     assert "\x1b[" not in stdout
     assert "0 tests passed 1 tests failed\n" in stdout
+
+
+def test_expected_files_does_not_follow_a_symbolic_link(
+    tmp_path, make_exercise, run_autotest
+):
+    """
+    A file the test checks was created by the submitted program, so it may be
+    a link the program made.
+
+    Following one reads whatever the account running autotest can read -- and
+    check_files prints what it read back to the student in the difference, so
+    a link named as an expected_file is an arbitrary read.  The sandbox puts
+    those files out of reach; a student on their own account has only this.
+    """
+    secret = tmp_path / "secret.txt"
+    secret.write_text("the solution\n")
+    spec = (
+        "files=a.sh\nprogram=./a.sh\n"
+        f'1 command="ln -s {secret} out.txt; echo x" expected_stdout="x\\n"'
+        ' expected_files={"out.txt": "1\\n"}\n'
+    )
+    exercise = make_exercise(tmp_path, spec, files={"a.sh": SH})
+    stdout, stderr, status = run_autotest(exercise.args + ["--no_sandbox"])
+
+    assert status == 1, stdout + stderr
+    assert "the solution" not in stdout + stderr, stdout + stderr
+    assert "created a symbolic link" in stdout, stdout

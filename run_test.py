@@ -4,6 +4,7 @@
 # Much of the code can be moved to parameter_descriptions.py
 
 import codecs
+import errno
 import os
 import re
 import shlex
@@ -15,6 +16,21 @@ from termcolor import colored as termcolor_colored
 from explain_output_differences import explain_output_differences, sanitize_string
 from subprocess_with_resource_limits import run
 from util import InternalError
+
+
+def _open_no_symlink(path: str, flags: int) -> int:
+    """
+    open() a path, refusing to follow a symbolic link in its last component.
+
+    A test's files are created by the submitted program, so any of them may be
+    a link the program made.  Following one reads whatever the account running
+    autotest can read -- another submission, a solution, a private key -- and
+    check_files prints what it read back to the student in the difference.
+    The sandbox puts those files out of reach, but a test run without one
+    (a student on their own account, --no_sandbox) has only this.
+    """
+    return os.open(path, flags | os.O_NOFOLLOW)
+
 
 # Output limits for support commands (compilers, checkers, setup and
 # postprocess commands).  They are not resource-limited like a test, but a
@@ -234,13 +250,28 @@ class _Test:
             path = os.path.join(self.work_dir, pathname)
             try:
                 if self.parameters["unicode_files"]:
-                    with open(path, encoding="UTF-8", errors="replace") as f:
+                    with open(
+                        path,
+                        encoding="UTF-8",
+                        errors="replace",
+                        opener=_open_no_symlink,
+                    ) as f:
                         actual_contents: Union[str, bytes] = f.read()
                 else:
-                    with open(path, mode="rb") as f:
+                    with open(path, mode="rb", opener=_open_no_symlink) as f:
                         actual_contents = f.read()
-            except OSError:
-                self.long_explanation = f"Your program was expected to create a file named '{pathname}' and did not\n"
+            except OSError as e:
+                if e.errno == errno.ELOOP:
+                    # the program put a link where the file should be, and
+                    # following it would read, and then print back in the
+                    # difference, whatever the account running autotest can
+                    # read: another submission, a solution, a private key
+                    self.long_explanation = (
+                        f"Your program was expected to create a file named '{pathname}'"
+                        " and created a symbolic link instead\n"
+                    )
+                else:
+                    self.long_explanation = f"Your program was expected to create a file named '{pathname}' and did not\n"
                 actual_contents = ""
             short_explanation = self.check_stream(
                 actual_contents, expected_contents, f"file: {pathname}"
