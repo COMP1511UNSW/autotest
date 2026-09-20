@@ -370,6 +370,13 @@ def preparation_prefixes(tests_to_run: list[_Test]) -> Optional[list[list[Any]]]
     does: ten tests run "cp cs_chardle.c modified.c && sed ... modified.c",
     and the eleventh runs "sed ... modified.c" alone, which has nothing to
     edit unless the earlier command has already made the file.
+
+    This costs a test one command for each distinct command before its own.
+    The worst case in the COMP1511, COMP1521 and COMP2041 material is
+    COMP1521's pacman, 41 distinct commands over 140 tests, which spends a
+    few seconds of its run on them.  Should a specification ever make that
+    expensive, the way out is to snapshot the directory after each distinct
+    command in the shared one and copy a test's directory from its snapshot.
     """
     distinct: list[Any] = []
     position: dict[str, int] = {}
