@@ -359,3 +359,42 @@ def test_find_autotest_dir_returns_the_first_existing_path(exercises):
 def test_find_autotest_dir_dies_without_an_exercise(exercises):
     with pytest.raises(InternalError, match=r"^no autotest found$"):
         cla.find_autotest_dir([str(exercises)], "", ["tests.txt"])
+
+
+def test_no_sandbox_refuses_to_contradict_a_wrapper(exercises, run_autotest):
+    """
+    A marking wrapper sets "sandbox = True" with -P and forwards "$@".
+
+    --no_sandbox on the end of its arguments used to turn the sandbox off and
+    say nothing, so whoever called the wrapper could run student code
+    unconfined. A marking run must not be talked out of its sandbox by a
+    trailing argument.
+    """
+    stdout, stderr, status = run_autotest(
+        ["-e", "prime", "-E", str(exercises), "-P", "sandbox=True", "--no_sandbox"]
+    )
+    assert "contradicts" in stdout + stderr, stdout + stderr
+    assert status != 0
+
+
+def test_no_sandbox_agrees_with_a_wrapper_that_already_turned_it_off(
+    exercises, run_autotest
+):
+    stdout, stderr, _status = run_autotest(
+        ["-e", "prime", "-E", str(exercises), "-P", "sandbox=False", "--no_sandbox"]
+    )
+    assert "contradicts" not in stdout + stderr, stdout + stderr
+
+
+def test_check_stability_does_not_swallow_the_exercise(exercises):
+    """
+    The exercise is a positional argument, so with type=int
+    "--check_stability lab06" was an argparse error rather than lab06 run
+    twice.
+    """
+    args = selection(exercises, "--check_stability", "prime")
+    assert args.initial_parameters["stability_runs"] == 2
+    assert "prime" in args.extra_arguments or args.exercise == "prime"
+
+    args = selection(exercises, "--check_stability=5", "prime")
+    assert args.initial_parameters["stability_runs"] == 5

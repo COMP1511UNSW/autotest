@@ -158,6 +158,7 @@ known-first-party = [
     "parse_test_specification", "run_test", "run_tests", "sandbox",
     "sandbox_landlock", "sandbox_seccomp", "subprocess_with_resource_limits",
     "upload_results", "util",
+    "lint_specification",
 ]
 
 # ---------------------------------------------------------------- mypy

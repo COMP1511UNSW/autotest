@@ -7,6 +7,7 @@ import re
 import sys
 
 from copy_files_to_temp_directory import load_embedded_autotest
+from parameter_descriptions import value_to_bool
 from parse_test_specification import parse_file, parse_string
 from run_test import _Test
 from util import die
@@ -50,7 +51,7 @@ def process_arguments():
     return args, tests, parameters
 
 
-def parse_arguments():  # noqa: C901, PLR0915 - one branch and one statement per command-line option
+def parse_arguments():  # noqa: C901, PLR0912, PLR0915 - one branch and one statement per command-line option
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawDescriptionHelpFormatter, epilog=EXTRA_HELP
     )
@@ -110,21 +111,23 @@ def parse_arguments():  # noqa: C901, PLR0915 - one branch and one statement per
     parser.add_argument(
         "--lint",
         action="store_true",
-        help="check the test specification and report what is wrong with it, without running any test",
+        help="report commands the specification names (checkers, setup_command, pre_compile_command, postprocess_output_command) that can not be run, without running any test",
     )
     parser.add_argument(
         "--json",
         metavar="FILE",
         dest="json_results_file",
-        help="write a machine-readable description of the run to FILE ('-' for stdout)",
+        help="write a machine-readable description of the run to FILE ('-' for stdout); nothing is written if no test ran",
     )
     parser.add_argument(
         "--check_stability",
         nargs="?",
-        type=int,
-        const=2,
+        # not type=int: the exercise is a positional, so
+        # "--check_stability lab06" would be an argparse error rather than
+        # lab06 run twice.  The value is sorted out below.
+        const="2",
         metavar="N",
-        help="run each test N times (default 2) and report any test whose result is not the same every time (sets parameter stability_runs)",
+        help="run each test N times (default 2, as --check_stability=N) and report any test whose result is not the same every time (sets parameter stability_runs)",
     )
     parser.add_argument(
         "--stats",
@@ -146,7 +149,7 @@ def parse_arguments():  # noqa: C901, PLR0915 - one branch and one statement per
     source_args.add_argument(
         "-G",
         "--git",
-        help="add files from this this git repository to the test directory",
+        help="add files from this git repository to the test directory",
     )
     source_args.add_argument(
         "-S",
@@ -189,11 +192,24 @@ def parse_arguments():  # noqa: C901, PLR0915 - one branch and one statement per
     if args.jobs is not None:
         args.initial_parameters["parallel_tests"] = args.jobs
     if args.no_sandbox:
+        # A marking wrapper sets "sandbox = True" with -P and forwards "$@",
+        # so --no_sandbox on the end of its arguments turned the sandbox off
+        # and said nothing.  Refusing is the only safe answer: a marking run
+        # must not be talked out of its sandbox by a trailing argument.
+        if "sandbox" in args.initial_parameters and value_to_bool(
+            args.initial_parameters["sandbox"]
+        ):
+            die("--no_sandbox contradicts the sandbox=True given with -P")
         args.initial_parameters["sandbox"] = False
     if args.stats:
         args.initial_parameters["report_resource_usage"] = True
     if args.check_stability is not None:
-        args.initial_parameters["stability_runs"] = args.check_stability
+        # a word which is not a count is the exercise, not the count
+        if str(args.check_stability).isdigit():
+            args.initial_parameters["stability_runs"] = int(args.check_stability)
+        else:
+            args.initial_parameters["stability_runs"] = 2
+            args.extra_arguments.insert(0, args.check_stability)
     # so a specification can see it, and dcc_output_checking can default off
     args.initial_parameters.setdefault("marking", bool(args.marking))
 

@@ -57,5 +57,5 @@ coverage:
 
 check: lint test
 
-README.md: README.template.md parameter_descriptions.py Makefile
+README.md: README.template.md parameter_descriptions.py examples/wrapper.sh examples/simple_C/tests.txt Makefile
 	perl -pe '/^#execute *(\s.*)/ and do { $$_ = `$$1`; $$? == 0 or die "$$1 failed\n" }' $< >$@ || { rm -f $@; exit 1; }

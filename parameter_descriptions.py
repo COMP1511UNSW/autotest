@@ -214,7 +214,7 @@ PARAMETER_LIST += [
             If **`files`** is not specified it is set to the parameter **`program`**
             with a `.c`  appended iff **`program`** does not contain a '.'.<br>
             For example if **`files`** is not specified and **`program`** == **`hello`**, **`files`** will be set to `hello.c`,
-            but if **`program`** == `hello.sh` **`files`** will be set to `hello.c`
+            but if **`program`** == `hello.sh` **`files`** will be set to `hello.sh`
         """,
     ),
     Parameter(
@@ -238,7 +238,12 @@ PARAMETER_LIST += [
         "pre_compile_command",
         finalize=finalize_command,
         description="""
-            If set **`pre_compile_command`** is executed once before compilation.<br>
+            If set **`pre_compile_command`** is executed before compilation, in
+            the test's own copy of the test directory.<br>
+            When the tests being run have different **`pre_compile_command`**s,
+            every distinct command appearing earlier in the specification runs
+            there first, so one command can run many times in a run: write it
+            so that running it again is harmless.<br>
             This is invisible to the user, unless **`pre_compile_command`** produces output.<br>
             Compilation does not occur if **`pre_compile_command`** has a non-zero exit-status.<br>
             If **`pre_compile_command`** is a string, it is passed to a shell.<br>
@@ -724,10 +729,10 @@ PARAMETER_LIST += [
             can not shadow a program found elsewhere in `PATH`.
 
             The environment  variables in **`environment_base`** are set and then,
-            environment  variables specified in **`environment_set`** are set.<bt>
-            This parameter should not normally be used.<bt>
-            The parameter **`environment_set`** should normally be used instead of this parameter.<bt>
-            It is only necessary to specify **`environment_base`** if these variables need to be unset rather than given different values for a test.<bt>
+            environment  variables specified in **`environment_set`** are set.<br>
+            This parameter should not normally be used.<br>
+            The parameter **`environment_set`** should normally be used instead of this parameter.<br>
+            It is only necessary to specify **`environment_base`** if these variables need to be unset rather than given different values for a test.<br>
         """,
     ),
     Parameter(
@@ -749,7 +754,7 @@ PARAMETER_LIST += [
             This parameter should not normally be specified,
             **`environment_set`** will serve most purposes.<br>
             By default **`environment`** is formed by taking original environment variables provided to autotest,<br>
-            removing all but those matching the regex in **`environment_variables_kept`**,<br>
+            removing all but those matching the regex in **`environment_kept`**,<br>
             setting any variables specified in **`environment_base`** and then<br>
             setting any variables specified in **`environment_set`**.
 
@@ -882,7 +887,9 @@ PARAMETER_LIST += [
         "max_stdout_bytes",
         finalize=finalize_max_bytes,
         description="""
-            Maximum number of bytes that can be written to *stdout* (0 for no limit).<br>
+            Maximum number of bytes that can be written to *stdout*.<br>
+            A value below the length of **`expected_stdout`** is raised to it,
+            so `0` means no limit only when no output is expected.<br>
             If not specified, a limit is chosen based on the size of **`expected_stdout`**.
         """,
     ),
@@ -890,7 +897,9 @@ PARAMETER_LIST += [
         "max_stderr_bytes",
         finalize=finalize_max_bytes,
         description="""
-            Maximum number of bytes that can be written to *stderr* (0 for no limit).<br>
+            Maximum number of bytes that can be written to *stderr*.<br>
+            A value below the length of **`expected_stderr`** is raised to it,
+            so `0` means no limit only when no output is expected.<br>
             If not specified, a limit is chosen based on the size of **`expected_stderr`**.
         """,
     ),
@@ -939,7 +948,10 @@ PARAMETER_LIST += [
             shorter than a fifth of a second reports 0.<br>
             CPU time is not reported: the only ways to obtain it here are
             process-wide, and would attribute other tests' work to this one
-            when tests run concurrently.
+            when tests run concurrently.<br>
+            The table is printed once for the run, so this must be set as a
+            global parameter: on a test line the test pays to be measured and
+            nothing is printed.
         """,
     ),
     Parameter(
@@ -1248,7 +1260,14 @@ PARAMETER_LIST += [
         finalize=finalize_dcc_output_checking,
         description="""
             Use dcc's builtin output checking to check for tests's expected output.
-            This is done by setting several environment variables for the test
+            This is done by setting several environment variables for the test.<br>
+            If not set explicitly it is used only for a simple test of a single
+            `.c` file (no **`expected_stderr`**, **`compiler_args`** or
+            **`postprocess_output_command`**), and never when **`marking`** is
+            true, because it passes the expected output to the test in
+            `DCC_EXPECTED_STDOUT` where the program being tested can read it.<br>
+            A specification which wants dcc's diff while marking must set
+            `dcc_output_checking=1`.
         """,
     ),
     "### Miscellaneous parameters",
@@ -1379,7 +1398,9 @@ PARAMETER_LIST += [
         description="""
             If true, programs run in the **`sandbox`** have no network access:
             they are given a private network namespace with only a loopback interface.<br>
-            Set to false to allow tests to use the network.
+            Set to false to allow tests to use the network.<br>
+            Only one value is used for all tests.  This parameter must be set as
+            a global parameter: a value on a test line is ignored.
 
             An exercise whose tests fetch a URL, or whose **`setup_command`** or
             **`pre_compile_command`** installs packages, needs `sandbox_network=False`.
@@ -1399,6 +1420,7 @@ PARAMETER_LIST += [
         default=268435456,
         description="""
             Size in bytes of the private `/tmp` seen by programs run in the **`sandbox`**.
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
         """,
     ),
     Parameter(
@@ -1406,6 +1428,7 @@ PARAMETER_LIST += [
         default=67108864,
         description="""
             Size in bytes of the private `/dev/shm` seen by programs run in the **`sandbox`**.
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
         """,
     ),
     Parameter(
@@ -1415,6 +1438,7 @@ PARAMETER_LIST += [
             If true, a seccomp filter blocking dangerous system calls is applied to programs run in the **`sandbox`**,
             when the kernel and architecture support it.<br>
             The namespace boundary of the sandbox does not depend on this.
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
         """,
     ),
     Parameter(
@@ -1424,6 +1448,7 @@ PARAMETER_LIST += [
             If true, Landlock rules restricting filesystem access are applied to programs run in the **`sandbox`**,
             when the kernel supports them.<br>
             The namespace boundary of the sandbox does not depend on this.
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
         """,
     ),
     Parameter(
@@ -1444,6 +1469,7 @@ PARAMETER_LIST += [
             Pathnames which do not exist on the host are ignored.<br>
             The parameter **`sandbox_read_only_mount`** should be used to add extra pathnames.<br>
             This parameter need only be set to stop one of these pathnames being visible.
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
         """,
     ),
     Parameter(
@@ -1454,6 +1480,7 @@ PARAMETER_LIST += [
             in addition to those specified by **`sandbox_read_only_mount_base`**.<br>
             A `(host_pathname, sandbox_pathname)` tuple can be used to make a pathname visible at a different
             location in the sandbox.
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
         """,
     ),
     Parameter(
@@ -1465,6 +1492,7 @@ PARAMETER_LIST += [
             location in the sandbox.<br>
             The test directory is always read-write and `/tmp`, `/dev/shm`, `/dev` and `/proc` are always private
             to the sandbox, so they do not need to be specified here.
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
         """,
     ),
     Parameter(
@@ -1524,7 +1552,9 @@ PARAMETER_LIST += [
 
             Tests sharing a directory can not be run concurrently,
             so **`parallel_tests`** is ignored and the tests are run one at a time.<br>
-            Only one value is used for all tests.  This parameter must be set as a global parameter.
+            Set this as a global parameter.  A value on a single test line does
+            take effect for that test, but the run is not serialized for it, so
+            that test would run in the directory the other tests are copying.
         """,
     ),
 ]

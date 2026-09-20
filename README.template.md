@@ -45,6 +45,22 @@ of the autotest specification.
 
 **-D DIRECTORY, --directory DIRECTORY** copy files in the specified directory to the test directory.
 
+**--lint** report commands the specification names (`checkers`, `setup_command`,
+`pre_compile_command`, `postprocess_output_command`) which can not be run, without
+running any test.  Nothing is copied and nothing is executed, so it can be run over a
+whole course tree; it exits non-zero if it found anything.
+
+**--stats** print what each test cost: peak memory and wall clock
+(sets the parameter **`report_resource_usage`**).
+
+**--check_stability=N** run each test N times (default 2) and report any test whose
+result is not the same every time (sets the parameter **`stability_runs`**).
+A test which does not reach the same result twice is marking students on a coin flip.
+
+**--json FILE** write a machine-readable description of the run to FILE (`-` for stdout):
+a versioned document with a summary and one record per test.  Nothing is written if no
+test ran.
+
 **-g, --generate_expected_output** generate expected output for the tests
 by executing the supplied files.
 
@@ -69,7 +85,9 @@ Programs are compiled in this directory if needed.
 Each test then runs in its own copy of this directory,
 so a test never sees files created or modified by an earlier test.
 Anything a test needs which is not in the test specification directory
-must be created by its `setup_command`.
+must be created by its `setup_command`, unless the specification sets
+`shared_test_directory`, which runs every test in one directory as earlier versions did
+(those tests then can not run concurrently).
 
 Tests can be run in parallel by setting the parameter `parallel_tests`
 or with the command-line option `-j N`/`--jobs N` (`0` means one test per CPU).
@@ -81,7 +99,8 @@ The default `PATH` is `/bin:/usr/bin:/usr/local/bin:$PATH:.` - the current direc
 
 By default tests are executed with resource limits which can be specified with test parameters
 (`max_cpu_seconds`, `max_rss_bytes`, `max_stdout_bytes`, ...).
-A limit of `0` means no limit.
+A limit of `0` means no limit, except that **`max_stdout_bytes`** and **`max_stderr_bytes`**
+are never set below the length of the expected output, and `max_core_size` (default `0`) means no core file.
 
 ### Sandbox
 
@@ -101,6 +120,8 @@ The global parameter `sandbox` has three settings:
   Marking wrappers should set `sandbox = True`.
 * a false value (`0`, `no`, `off`, ...) or the command-line option `--no_sandbox`:
   no sandbox, programs run with all the privileges of the user running autotest.
+  `--no_sandbox` is refused if `sandbox` was set true with `-P`, so a marking wrapper which
+  passes `sandbox = True` and forwards its arguments can not be talked out of its sandbox.
 
 Inside the sandbox:
 
@@ -151,11 +172,12 @@ with `sandbox=True` it stops.
 Test specifications are trusted: `tests.txt` can run arbitrary commands
 and its f-strings are evaluated as Python, with the privileges of the user running autotest and outside the sandbox.
 A test specification must only ever come from staff, never from a submission.
-Files in the autotest directory are copied over the submission, so a submission can not replace `tests.txt`
-or anything else the autotest supplies.
-The specification itself is not copied: `tests.txt` and `automarking.txt` are left behind,
+Files in the autotest directory are copied over the submission, so a submission can not replace a checker,
+an expected output file or anything else the autotest supplies.
+A specification named `tests.txt` or `automarking.txt` is not copied: those two names are left behind,
 so the program being tested is not handed every expected output,
 and a student running an exercise's own tests is not handed its marking tests.
+A specification given to `-a` under any other name is copied like any other file in its directory.
 Everything else in the autotest directory is copied and can be read by the program being tested,
 so a sample solution or anything else students should not see must be kept elsewhere.
 
@@ -176,7 +198,10 @@ Submissions are not trusted. With the sandbox a submitted program can:
 It can not:
 
 * read or modify any other file of the user running autotest (or anybody else's) -
-  the submission is copied without following symbolic links, so a link can not smuggle one in;
+  a submission fetched with `--directory`, `--git` or `--tarfile` is copied without following
+  symbolic links, so a link can not smuggle a file in.  Files copied by name from the current
+  directory, when no submission option is given, do follow links, which is why a marking run
+  must use one of those options;
 * see, signal or trace processes outside the sandbox, including other tests;
 * use the network;
 * gain privileges via nested user namespaces, `mount` or `setns`;
@@ -194,6 +219,11 @@ and should run autotest as an account with no access to anything a student shoul
 
 For maintainers upgrading from an earlier version of autotest:
 
+* `tests.txt` and `automarking.txt` are no longer copied into the test directory, so a checker
+  or `setup_command` which read the specification from there no longer finds it;
+* `dcc_output_checking` is off by default under `-m`, because it passes the expected output to the
+  program in `DCC_EXPECTED_STDOUT`; a marking specification which wants dcc's diff must set
+  `dcc_output_checking=1`;
 * files supplied by the autotest now win over same-named submitted files in every submission mode
   (directory, `--stdin`, `--tarfile`, `--git`, ...); previously submitted files could replace them;
 * each test runs in its own copy of the test directory - a test no longer sees files
@@ -323,7 +353,8 @@ except that the empty string, `off` and strings starting with `0`, `f`, `F`, `n`
 The command line parameter -d/--debug set increasing levels of debug output.
 
 This can also be done using the environmental variable **`AUTOTEST_DEBUG`**
-Python stack backtraces are only shown if **`AUTOTEST_DEBUG`** is set to a non-zero integer.
+Python stack backtraces are shown when **`AUTOTEST_DEBUG`** is set to any non-empty value
+(`0` included); `-d` alone does not show them.
 
 
 
@@ -375,7 +406,19 @@ directory: `make lint VENV_BIN=/path/to/venv/bin`.
   `sandbox_landlock.py`, `# runs in the forked child before exec: <test>` for the three functions
   of `subprocess_with_resource_limits.py` which apply the resource limits to every command,
   `--no_sandbox` included.
-* `make check` is `lint` then `test`; the GitHub workflows run the same targets.
+* `make check` is `lint` then `test`.  CI runs `make lint` and `make coverage`,
+  so run `make coverage` before pushing: only it applies the `fail_under` gate.
+* `make README.md` regenerates this file.  The whole of it is generated: edit
+  `README.template.md` or `parameter_descriptions.py`, never `README.md` itself.
+* `scripts/replay_activities.sh OLD_TREE NEW_TREE MATERIALS...` replays a course's activities
+  against their own model solutions under two trees and reports every activity whose result
+  changed - the only check which exercises real specifications rather than fixtures, and the
+  one which found every defect the parallel work introduced.  It needs course material, so CI
+  can not run it; run it by hand before a change to the sandbox or to parallelism.  It exits
+  non-zero on a verdict it has not been told about.  `scripts/replay_approved.txt` holds the
+  verdict changes somebody has read and accepted, `scripts/replay_unstable.txt` the activities
+  which differ from themselves.  Read the script's header for the `REPLAY_*` variables and the
+  memory cap it must be run under.
 
 A checker finding is fixed, not silenced. Where a rule is wrong for one line the suppression is inline,
 names the rule and says why: `# noqa: CODE - reason` for ruff, `# nosec BXXX` for bandit

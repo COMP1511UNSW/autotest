@@ -61,6 +61,22 @@ of the autotest specification.
 
 **-D DIRECTORY, --directory DIRECTORY** copy files in the specified directory to the test directory.
 
+**--lint** report commands the specification names (`checkers`, `setup_command`,
+`pre_compile_command`, `postprocess_output_command`) which can not be run, without
+running any test.  Nothing is copied and nothing is executed, so it can be run over a
+whole course tree; it exits non-zero if it found anything.
+
+**--stats** print what each test cost: peak memory and wall clock
+(sets the parameter **`report_resource_usage`**).
+
+**--check_stability=N** run each test N times (default 2) and report any test whose
+result is not the same every time (sets the parameter **`stability_runs`**).
+A test which does not reach the same result twice is marking students on a coin flip.
+
+**--json FILE** write a machine-readable description of the run to FILE (`-` for stdout):
+a versioned document with a summary and one record per test.  Nothing is written if no
+test ran.
+
 **-g, --generate_expected_output** generate expected output for the tests
 by executing the supplied files.
 
@@ -85,7 +101,9 @@ Programs are compiled in this directory if needed.
 Each test then runs in its own copy of this directory,
 so a test never sees files created or modified by an earlier test.
 Anything a test needs which is not in the test specification directory
-must be created by its `setup_command`.
+must be created by its `setup_command`, unless the specification sets
+`shared_test_directory`, which runs every test in one directory as earlier versions did
+(those tests then can not run concurrently).
 
 Tests can be run in parallel by setting the parameter `parallel_tests`
 or with the command-line option `-j N`/`--jobs N` (`0` means one test per CPU).
@@ -97,7 +115,8 @@ The default `PATH` is `/bin:/usr/bin:/usr/local/bin:$PATH:.` - the current direc
 
 By default tests are executed with resource limits which can be specified with test parameters
 (`max_cpu_seconds`, `max_rss_bytes`, `max_stdout_bytes`, ...).
-A limit of `0` means no limit.
+A limit of `0` means no limit, except that **`max_stdout_bytes`** and **`max_stderr_bytes`**
+are never set below the length of the expected output, and `max_core_size` (default `0`) means no core file.
 
 ### Sandbox
 
@@ -117,6 +136,8 @@ The global parameter `sandbox` has three settings:
   Marking wrappers should set `sandbox = True`.
 * a false value (`0`, `no`, `off`, ...) or the command-line option `--no_sandbox`:
   no sandbox, programs run with all the privileges of the user running autotest.
+  `--no_sandbox` is refused if `sandbox` was set true with `-P`, so a marking wrapper which
+  passes `sandbox = True` and forwards its arguments can not be talked out of its sandbox.
 
 Inside the sandbox:
 
@@ -167,11 +188,12 @@ with `sandbox=True` it stops.
 Test specifications are trusted: `tests.txt` can run arbitrary commands
 and its f-strings are evaluated as Python, with the privileges of the user running autotest and outside the sandbox.
 A test specification must only ever come from staff, never from a submission.
-Files in the autotest directory are copied over the submission, so a submission can not replace `tests.txt`
-or anything else the autotest supplies.
-The specification itself is not copied: `tests.txt` and `automarking.txt` are left behind,
+Files in the autotest directory are copied over the submission, so a submission can not replace a checker,
+an expected output file or anything else the autotest supplies.
+A specification named `tests.txt` or `automarking.txt` is not copied: those two names are left behind,
 so the program being tested is not handed every expected output,
 and a student running an exercise's own tests is not handed its marking tests.
+A specification given to `-a` under any other name is copied like any other file in its directory.
 Everything else in the autotest directory is copied and can be read by the program being tested,
 so a sample solution or anything else students should not see must be kept elsewhere.
 
@@ -192,7 +214,10 @@ Submissions are not trusted. With the sandbox a submitted program can:
 It can not:
 
 * read or modify any other file of the user running autotest (or anybody else's) -
-  the submission is copied without following symbolic links, so a link can not smuggle one in;
+  a submission fetched with `--directory`, `--git` or `--tarfile` is copied without following
+  symbolic links, so a link can not smuggle a file in.  Files copied by name from the current
+  directory, when no submission option is given, do follow links, which is why a marking run
+  must use one of those options;
 * see, signal or trace processes outside the sandbox, including other tests;
 * use the network;
 * gain privileges via nested user namespaces, `mount` or `setns`;
@@ -210,6 +235,11 @@ and should run autotest as an account with no access to anything a student shoul
 
 For maintainers upgrading from an earlier version of autotest:
 
+* `tests.txt` and `automarking.txt` are no longer copied into the test directory, so a checker
+  or `setup_command` which read the specification from there no longer finds it;
+* `dcc_output_checking` is off by default under `-m`, because it passes the expected output to the
+  program in `DCC_EXPECTED_STDOUT`; a marking specification which wants dcc's diff must set
+  `dcc_output_checking=1`;
 * files supplied by the autotest now win over same-named submitted files in every submission mode
   (directory, `--stdin`, `--tarfile`, `--git`, ...); previously submitted files could replace them;
 * each test runs in its own copy of the test directory - a test no longer sees files
@@ -398,7 +428,7 @@ Input files required to be supplied for a test.
 If **`files`** is not specified it is set to the parameter **`program`**
 with a `.c`  appended iff **`program`** does not contain a '.'.  
 For example if **`files`** is not specified and **`program`** == **`hello`**, **`files`** will be set to `hello.c`,
-but if **`program`** == `hello.sh` **`files`** will be set to `hello.c`
+but if **`program`** == `hello.sh` **`files`** will be set to `hello.sh`
 
 **`optional_files`** = \[\]
 
@@ -415,7 +445,12 @@ Check Perl, Python, Shell scripts have appropriate #! line.
 **`pre_compile_command`**
 
 
-If set **`pre_compile_command`** is executed once before compilation.  
+If set **`pre_compile_command`** is executed before compilation, in
+the test's own copy of the test directory.  
+When the tests being run have different **`pre_compile_command`**s,
+every distinct command appearing earlier in the specification runs
+there first, so one command can run many times in a run: write it
+so that running it again is harmless.  
 This is invisible to the user, unless **`pre_compile_command`** produces output.  
 Compilation does not occur if **`pre_compile_command`** has a non-zero exit-status.  
 If **`pre_compile_command`** is a string, it is passed to a shell.  
@@ -564,10 +599,10 @@ The test directory (`.`) is searched last, so a file supplied for a test
 can not shadow a program found elsewhere in `PATH`.
 
 The environment  variables in **`environment_base`** are set and then,
-environment  variables specified in **`environment_set`** are set.<bt>
-This parameter should not normally be used.<bt>
-The parameter **`environment_set`** should normally be used instead of this parameter.<bt>
-It is only necessary to specify **`environment_base`** if these variables need to be unset rather than given different values for a test.<bt>
+environment  variables specified in **`environment_set`** are set.  
+This parameter should not normally be used.  
+The parameter **`environment_set`** should normally be used instead of this parameter.  
+It is only necessary to specify **`environment_base`** if these variables need to be unset rather than given different values for a test.  
 
 **`environment_set`** = {}
 
@@ -583,7 +618,7 @@ Dict specifying all environment variables for this test.
 This parameter should not normally be specified,
 **`environment_set`** will serve most purposes.  
 By default **`environment`** is formed by taking original environment variables provided to autotest,  
-removing all but those matching the regex in **`environment_variables_kept`**,  
+removing all but those matching the regex in **`environment_kept`**,  
 setting any variables specified in **`environment_base`** and then  
 setting any variables specified in **`environment_set`**.
 
@@ -645,13 +680,17 @@ If a resource limit is exceeded, the test is failed with an explanatory message.
 **`max_stdout_bytes`**
 
 
-Maximum number of bytes that can be written to *stdout* (0 for no limit).  
+Maximum number of bytes that can be written to *stdout*.  
+A value below the length of **`expected_stdout`** is raised to it,
+so `0` means no limit only when no output is expected.  
 If not specified, a limit is chosen based on the size of **`expected_stdout`**.
 
 **`max_stderr_bytes`**
 
 
-Maximum number of bytes that can be written to *stderr* (0 for no limit).  
+Maximum number of bytes that can be written to *stderr*.  
+A value below the length of **`expected_stderr`** is raised to it,
+so `0` means no limit only when no output is expected.  
 If not specified, a limit is chosen based on the size of **`expected_stderr`**.
 
 **`max_real_seconds`**
@@ -689,7 +728,10 @@ exits between two samples reports less than it used, and a test
 shorter than a fifth of a second reports 0.  
 CPU time is not reported: the only ways to obtain it here are
 process-wide, and would attribute other tests' work to this one
-when tests run concurrently.
+when tests run concurrently.  
+The table is printed once for the run, so this must be set as a
+global parameter: on a test line the test pays to be measured and
+nothing is printed.
 
 **`max_rss_bytes`** = 1000000000
 
@@ -870,7 +912,14 @@ it.
 
 
 Use dcc's builtin output checking to check for tests's expected output.
-This is done by setting several environment variables for the test
+This is done by setting several environment variables for the test.  
+If not set explicitly it is used only for a simple test of a single
+`.c` file (no **`expected_stderr`**, **`compiler_args`** or
+**`postprocess_output_command`**), and never when **`marking`** is
+true, because it passes the expected output to the test in
+`DCC_EXPECTED_STDOUT` where the program being tested can read it.  
+A specification which wants dcc's diff while marking must set
+`dcc_output_checking=1`.
 
 ### Miscellaneous parameters
 
@@ -930,7 +979,9 @@ If false, only the test **`command`** is sandboxed.
 
 If true, programs run in the **`sandbox`** have no network access:
 they are given a private network namespace with only a loopback interface.  
-Set to false to allow tests to use the network.
+Set to false to allow tests to use the network.  
+Only one value is used for all tests.  This parameter must be set as
+a global parameter: a value on a test line is ignored.
 
 An exercise whose tests fetch a URL, or whose **`setup_command`** or
 **`pre_compile_command`** installs packages, needs `sandbox_network=False`.
@@ -948,11 +999,13 @@ exercise allows it.
 
 
 Size in bytes of the private `/tmp` seen by programs run in the **`sandbox`**.
+Only one value is used for all tests.  This parameter must be set as a global parameter.
 
 **`sandbox_shm_bytes`** = 67108864
 
 
 Size in bytes of the private `/dev/shm` seen by programs run in the **`sandbox`**.
+Only one value is used for all tests.  This parameter must be set as a global parameter.
 
 **`sandbox_seccomp`** = True
 
@@ -960,6 +1013,7 @@ Size in bytes of the private `/dev/shm` seen by programs run in the **`sandbox`*
 If true, a seccomp filter blocking dangerous system calls is applied to programs run in the **`sandbox`**,
 when the kernel and architecture support it.  
 The namespace boundary of the sandbox does not depend on this.
+Only one value is used for all tests.  This parameter must be set as a global parameter.
 
 **`sandbox_landlock`** = True
 
@@ -967,6 +1021,7 @@ The namespace boundary of the sandbox does not depend on this.
 If true, Landlock rules restricting filesystem access are applied to programs run in the **`sandbox`**,
 when the kernel supports them.  
 The namespace boundary of the sandbox does not depend on this.
+Only one value is used for all tests.  This parameter must be set as a global parameter.
 
 **`sandbox_read_only_mount_base`** = \['/bin', '/etc', '/lib', '/lib32', '/lib64', '/libx32', '/opt', '/sbin', '/usr'\]
 
@@ -975,6 +1030,7 @@ Pathnames of files or directories made visible read-only in the **`sandbox`**.
 Pathnames which do not exist on the host are ignored.  
 The parameter **`sandbox_read_only_mount`** should be used to add extra pathnames.  
 This parameter need only be set to stop one of these pathnames being visible.
+Only one value is used for all tests.  This parameter must be set as a global parameter.
 
 **`sandbox_read_only_mount`** = \[\]
 
@@ -983,6 +1039,7 @@ Pathnames of files or directories made visible read-only in the **`sandbox`**
 in addition to those specified by **`sandbox_read_only_mount_base`**.  
 A `(host_pathname, sandbox_pathname)` tuple can be used to make a pathname visible at a different
 location in the sandbox.
+Only one value is used for all tests.  This parameter must be set as a global parameter.
 
 **`sandbox_read_write_mount`** = \[\]
 
@@ -992,6 +1049,7 @@ A `(host_pathname, sandbox_pathname)` tuple can be used to make a pathname visib
 location in the sandbox.  
 The test directory is always read-write and `/tmp`, `/dev/shm`, `/dev` and `/proc` are always private
 to the sandbox, so they do not need to be specified here.
+Only one value is used for all tests.  This parameter must be set as a global parameter.
 
 **`stability_runs`** = 1
 
@@ -1035,7 +1093,9 @@ creates files that a test without a **`setup_command`** then reads.
 
 Tests sharing a directory can not be run concurrently,
 so **`parallel_tests`** is ignored and the tests are run one at a time.  
-Only one value is used for all tests.  This parameter must be set as a global parameter.
+Set this as a global parameter.  A value on a single test line does
+take effect for that test, but the run is not serialized for it, so
+that test would run in the directory the other tests are copying.
 
 <!--- end - autogenerated from parameter_descriptions.py --->
 
@@ -1046,7 +1106,8 @@ Only one value is used for all tests.  This parameter must be set as a global pa
 The command line parameter -d/--debug set increasing levels of debug output.
 
 This can also be done using the environmental variable **`AUTOTEST_DEBUG`**
-Python stack backtraces are only shown if **`AUTOTEST_DEBUG`** is set to a non-zero integer.
+Python stack backtraces are shown when **`AUTOTEST_DEBUG`** is set to any non-empty value
+(`0` included); `-d` alone does not show them.
 
 
 
@@ -1098,7 +1159,19 @@ directory: `make lint VENV_BIN=/path/to/venv/bin`.
   `sandbox_landlock.py`, `# runs in the forked child before exec: <test>` for the three functions
   of `subprocess_with_resource_limits.py` which apply the resource limits to every command,
   `--no_sandbox` included.
-* `make check` is `lint` then `test`; the GitHub workflows run the same targets.
+* `make check` is `lint` then `test`.  CI runs `make lint` and `make coverage`,
+  so run `make coverage` before pushing: only it applies the `fail_under` gate.
+* `make README.md` regenerates this file.  The whole of it is generated: edit
+  `README.template.md` or `parameter_descriptions.py`, never `README.md` itself.
+* `scripts/replay_activities.sh OLD_TREE NEW_TREE MATERIALS...` replays a course's activities
+  against their own model solutions under two trees and reports every activity whose result
+  changed - the only check which exercises real specifications rather than fixtures, and the
+  one which found every defect the parallel work introduced.  It needs course material, so CI
+  can not run it; run it by hand before a change to the sandbox or to parallelism.  It exits
+  non-zero on a verdict it has not been told about.  `scripts/replay_approved.txt` holds the
+  verdict changes somebody has read and accepted, `scripts/replay_unstable.txt` the activities
+  which differ from themselves.  Read the script's header for the `REPLAY_*` variables and the
+  memory cap it must be run under.
 
 A checker finding is fixed, not silenced. Where a rule is wrong for one line the suppression is inline,
 names the rule and says why: `# noqa: CODE - reason` for ruff, `# nosec BXXX` for bandit
