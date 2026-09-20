@@ -469,7 +469,11 @@ def finalize_compile_commands(  # noqa: C901, PLR0912 - one branch per way the p
 
         if isinstance(command, str):
             if compiler_args:
-                command += " " + " ".join(compiler_args)
+                # rstrip because a specification written before autotest put a
+                # separator here may end the compiler with a space of its own:
+                # 42 of the COMP1521 26T2 activities do, and without this the
+                # compile command shown to a student has a double space in it
+                command = command.rstrip() + " " + " ".join(compiler_args)
         else:
             command = command + compiler_args
 

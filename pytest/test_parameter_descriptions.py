@@ -867,3 +867,19 @@ def test_invalid_parallel_tests_is_an_error_naming_the_parameter(value):
         SpecificationError, match="invalid value for parameter 'parallel_tests'"
     ):
         finalize_parallel_tests("parallel_tests", value, {})
+
+
+def test_a_compiler_ending_in_a_space_does_not_produce_a_double_space():
+    """
+    Specifications written before autotest supplied the separator often end
+    the compiler with a space of their own; 42 of the COMP1521 26T2
+    activities do.  The command a student is shown must not have a gap in it.
+    """
+    tests, _globals = parse_string(
+        "files=a.c\n"
+        'compiler_args=["main.c", "a.c", "-o", "a"]\n'
+        'compilers=["gcc -Wall "]\n'
+        '1 expected_stdout="x"\n',
+        initial_parameters={"supplied_files_directory": "."},
+    )
+    assert tests["1"]["compile_commands"] == ["gcc -Wall main.c a.c -o a"]
