@@ -397,6 +397,13 @@ def run_tests_concurrently(context: RunContext, tests_to_run: list[_Test]) -> li
     run the tests, parallel_tests at a time, printing their results in
     test order as they complete; return their statuses in test order
     """
+    # A specification which asks every test to share one directory is asking
+    # for what a serial run did, so give it exactly that: preparing and
+    # running one test at a time, in order, is the only way a test which
+    # depends on what an earlier one left behind can see it.
+    if context.parameters.get("shared_test_directory"):
+        return [run_one_test(context, test) for test in tests_to_run]
+
     # phase 1: checkers and compilation, serially in the shared directory,
     # unless each test has to prepare in its own copy
     prefixes = preparation_prefixes(tests_to_run)
@@ -412,12 +419,7 @@ def run_tests_concurrently(context: RunContext, tests_to_run: list[_Test]) -> li
         prepared.append((test, test_files, out, outcome, None))
 
     # phase 2: each test in its own directory, on a worker thread
-    # tests sharing one directory would overwrite each other's files, so that
-    # choice decides this one: parallel_tests is ignored rather than obeyed
-    if context.parameters.get("shared_test_directory"):
-        n_workers = 1
-    else:
-        n_workers = max(1, int(context.parameters.get("parallel_tests", 1)))
+    n_workers = max(1, int(context.parameters.get("parallel_tests", 1)))
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=n_workers)
     results = []
     try:

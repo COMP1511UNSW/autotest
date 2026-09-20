@@ -280,3 +280,36 @@ def test_shared_test_directory_lets_a_test_use_an_earlier_test_s_files(
     )
     assert "2 tests passed 0 tests failed" in stdout, stdout
     assert status == 0
+
+
+def test_shared_test_directory_prepares_one_test_at_a_time(run_autotest, tmp_path):
+    """
+    Sharing a directory serialises preparation as well as execution.
+
+    Running every pre_compile_command up front would let the last one decide
+    what the first test saw, which is the defect per-test directories were
+    given their own preparation to fix.  A shared directory has to interleave
+    instead, exactly as a serial run did.
+    """
+    spec = tmp_path / "spec"
+    spec.mkdir()
+    (spec / "tests.txt").write_text(
+        "files=show.sh\n"
+        "program=./show.sh\n"
+        "shared_test_directory=1\n"
+        'one pre_compile_command="echo first > chosen.txt"\n'
+        'one command="cat chosen.txt" expected_stdout="first\\n"\n'
+        'two pre_compile_command="echo second > chosen.txt"\n'
+        'two command="cat chosen.txt" expected_stdout="second\\n"\n'
+    )
+    submission = tmp_path / "sub"
+    submission.mkdir()
+    show = submission / "show.sh"
+    show.write_text("#!/bin/sh\n")
+    show.chmod(0o700)
+
+    stdout, _stderr, status = run_autotest(
+        ["-D", str(submission), "-a", str(spec), "--no_sandbox"]
+    )
+    assert "2 tests passed 0 tests failed" in stdout, stdout
+    assert status == 0
