@@ -57,6 +57,9 @@ KNOWN_DIFFERENCES_FROM_MAIN = {
     # so it compiled the submission's deliberately broken a.c; supplied
     # files now win (see README "Changes in behaviour")
     "multi-file-simple": r" tests passed 0 tests failed *$",
+    # main prints a stray "event loop is closed" line after this fixture;
+    # the branch output is otherwise stable and ends with the normal summary
+    "limits": r"1 tests passed 6 tests failed *$",
 }
 
 
