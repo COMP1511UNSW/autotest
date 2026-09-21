@@ -1,4 +1,4 @@
-name: auto-blacken
+name: checks
 on: [push, pull_request]
 jobs:
   # job skipper in the case of concurrent push + pull_request trigger
@@ -13,9 +13,9 @@ jobs:
           concurrent_skipping: 'same_content'
           do_not_skip: '["push"]'
 
-  # actual autoblacken
-  main_job:
-    name: runner / black
+  # ruff, black, mypy, bandit and vulture, as configured in pyproject.toml
+  lint:
+    name: lint
     needs: pre_job
     if: ${{needs.pre_job.outputs.should_skip != 'true'}}
     runs-on: ubuntu-latest
@@ -29,9 +29,7 @@ jobs:
         if: github.event_name == 'push'
         with:
           fetch-depth: 0
-      # The same black as "make lint" checks with: the one in Pipfile.lock.
-      # A separately installed black can disagree with it, and then this
-      # job's commit is exactly what the lint job rejects.
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -55,20 +53,6 @@ jobs:
           # the Pipfile [requires], which is not installed on the runner
           pipenv --python "$(which python)" install --dev
 
-      - name: Check files using the black formatter
-        id: action_black
+      - name: Run the static checkers
         run: |
-          pipenv run black .
-          if git diff --quiet; then
-            echo "is_formatted=false" >>"$GITHUB_OUTPUT"
-          else
-            echo "is_formatted=true" >>"$GITHUB_OUTPUT"
-          fi
-
-      - name: Create commit on changes
-        if: steps.action_black.outputs.is_formatted == 'true'
-        run: |
-          git config --global user.name '${{github.actor}}'
-          git config --global user.email '${{github.actor}}@users.noreply.github.com'
-          git commit -am ":art: Format Python code with psf/black" -m "There appear to be some python formatting errors in ${{github.sha}}."
-          git push
+          pipenv run make lint

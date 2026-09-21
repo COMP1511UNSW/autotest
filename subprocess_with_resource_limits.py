@@ -1,227 +1,747 @@
 #!/usr/bin/python3
+"""Run a command with resource limits, output limits and a wall-clock limit.
 
-#
-# This code provides the equivalent of subprocess.run
-# with limits on CPU time and other resources.
-#
-# It was originally written for Python 2
-# Recent versions of Python 3 may allow this code to be rewrritten and much simplified
-#
+This is the equivalent of subprocess.run() for running a student's program:
+the program is untrusted and may loop forever, fork bomb, fill the disk or
+print without end, so every one of those is bounded here and the result is
+always a plain (stdout, stderr, returncode) tuple that the caller can compare
+against the test's expectations.
 
-import asyncio, locale, re, os, resource, signal, subprocess, sys, tempfile, threading
+The process is started in its own session so that everything it spawns shares
+a process group we can kill as a unit: killing only the direct child leaves
+its grandchildren (``sh -c "sleep 30 & wait"``) running and holding the pipes.
+Output is gathered with a selectors loop on the calling thread, so there are
+no event loops or timer threads and any number of threads may call run() at
+once; the only shared state is a lock-guarded registry of running process
+groups so a SIGINT handler can kill them all.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import resource
+import selectors
 import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from collections.abc import Mapping, Sequence
+from typing import IO, Protocol, cast
+
+# Process groups of commands currently running, so kill_all_running() can
+# stop every student program when autotest is interrupted.
+_running_process_groups: set[int] = set()
+_running_process_groups_lock = threading.Lock()
+
+# Set by stop_all(): once autotest is being interrupted no further command
+# may start, or a test started after the running ones were killed would
+# outlive the interrupt handler's os._exit().
+_stopped = threading.Event()
+
+# Longest single wait for output.  select() rejects a timeout beyond the
+# platform's time_t and a test specification may set max_real_seconds to
+# 1000000000 to mean "unlimited"; the loop re-computes the remaining time.
+_MAX_SELECT_SECONDS = 86400.0
+
+# How often the supervisor adds up the process group's memory.  A program can
+# exceed the limit between two samples, so this bounds how far over it gets:
+# the point is to stop a runaway before it reaches the machine's memory, not to
+# account for every page.
+_MEMORY_POLL_SECONDS = 0.2
+
+_PAGE_SIZE = resource.getpagesize()
+
+# indices into /proc/<pid>/stat counting from the field after the ')' that ends
+# the executable name: state, ppid, pgrp, ... rss
+_STAT_PGRP_INDEX = 2
+_STAT_RSS_INDEX = 21
+
+# Exit statuses a sandbox uses to report its own failure (see the sandbox
+# interface described in run()).  These match the shell's conventions so a
+# sandbox implemented with exec'd helpers reports the same numbers.
+_SANDBOX_FAILED_STATUS = 125
+_COMMAND_NOT_FOUND_STATUS = 127
+
+_READ_CHUNK_BYTES = 65536
 
 
-def run(command, **parameters):
-    if sys.platform == "win32":
-        loop = asyncio.ProactorEventLoop()
-        asyncio.set_event_loop(loop)
-    else:
-        # asyncio.get_event_loop() no longer implicitly creates a loop in Python 3.14+
-        loop = asyncio.new_event_loop()
+class SandboxLike(Protocol):
+    """What run() needs from a sandbox (see run()); sandbox.Sandbox is one."""
+
+    def preexec(self) -> None: ...
+
+    def pass_fds(self) -> Sequence[int]: ...
+
+    def error(self) -> str | None: ...
+
+
+def run(  # noqa: C901, PLR0912 - the argument checks, Popen and the result translation in one place, as subprocess.run itself is
+    command: str | Sequence[object],
+    *,
+    cwd: str | None = None,
+    env: Mapping[str, str] | None = None,
+    stdin: str | bytes | None = None,
+    unicode_stdin: bool = True,  # noqa: ARG001 - says what stdin holds; the encoding does not depend on it
+    sandbox: object = None,
+    max_real_seconds: int | None = 0,
+    max_cpu_seconds: int | None = 60,
+    max_core_size: int | None = 0,
+    max_stack_bytes: int | None = 32000000,
+    max_rss_bytes: int | None = 1000000000,
+    max_file_size_bytes: int | None = 8192000,
+    max_processes: int | None = 4096,
+    max_open_files: int | None = 256,
+    max_stdout_bytes: int | None = 1000000,
+    max_stderr_bytes: int | None = 10000,
+    nice: int = 0,
+    debug: int = 0,
+    report_resource_usage: bool = False,
+    **_ignored_parameters: object,
+) -> CommandResult:
+    """Run command and return (stdout, stderr, returncode).
+
+    command is a string run by bash (or /bin/sh) or a list executed directly.
+    stdin is text (encoded as UTF-8, because stdout is decoded as UTF-8 by the
+    caller and the two must agree) or bytes; unicode_stdin says which.
+
+    A limit of 0 or None means the limit is not applied, except max_core_size
+    where 0 is the useful value (no core files).  Limits are applied with
+    setrlimit() in the child; RLIMIT_DATA and RLIMIT_AS are deliberately not
+    set because they break the sanitizers used to check student programs.
+
+    sandbox, if given, is an object with preexec() (called first in the child,
+    before limits are set; it may fork so that only a grandchild returns),
+    pass_fds() (file descriptors the child must keep) and error() (a message
+    read once the child has exited, or None).  If the sandbox itself failed
+    (status 125) a SandboxError is raised; if the command could not be found
+    inside it (status 127) the result mirrors the OSError case below.
+
+    If the command cannot be started, returns (b"", error message, 2) so the
+    caller reports it like any other failed test rather than crashing.
+
+    returncode follows Popen: negative signal number when killed by a signal,
+    so a process we killed reports -9.  It is never None.
+
+    With report_resource_usage the result carries .usage, a ResourceUsage.
+    Measuring costs a walk of /proc every _MEMORY_POLL_SECONDS, which is why
+    it is off unless asked for (and already paid for when max_rss_bytes is
+    being enforced).
+
+    Extra keyword parameters are ignored so callers may pass a whole test's
+    parameter dictionary.
+    """
+    # tests.txt has a plain "sandbox" parameter (True/False/"auto" for the
+    # whole-run sandbox) which arrives here via run(**parameters); only an
+    # object implementing the interface above is a sandbox to us.
+    active_sandbox: SandboxLike | None = None
+    if sandbox is not None and hasattr(sandbox, "preexec"):
+        active_sandbox = cast(SandboxLike, sandbox)
+
+    if _stopped.is_set():
+        from util import AutotestException
+
+        raise AutotestException("autotest interrupted")
+
+    argv = _argv_for(command)
+    limits = _Limits(
+        max_cpu_seconds=max_cpu_seconds,
+        max_core_size=max_core_size,
+        max_stack_bytes=max_stack_bytes,
+        max_rss_bytes=max_rss_bytes,
+        max_file_size_bytes=max_file_size_bytes,
+        max_processes=max_processes,
+        max_open_files=max_open_files,
+        nice=nice,
+    )
+
+    def prepare_child() -> (
+        None
+    ):  # runs in the forked child before exec: test_sandbox_preexec_runs_in_child_before_command
+        # Runs in the child between fork and exec.  The sandbox goes first so
+        # the limits apply inside it (and to the grandchild it may fork).
+        if active_sandbox is not None:
+            active_sandbox.preexec()
+        limits.apply()
+
+    if debug > 1:
+        print("run", argv, file=sys.stderr)
+
+    stdin_file = _stdin_file(stdin)
     try:
-        cooroutine = run_coroutine(loop, command, **parameters)
-        output = loop.run_until_complete(cooroutine)
-    except KeyboardInterrupt:
-        loop.close()
-        sys.exit(1)
-    except OSError as e:
-        loop.close()
-        return (b"", re.sub(r"^\[.*?\] *", "", str(e)).encode("UTF-8"), 2)
-    loop.close()
+        try:
+            process = subprocess.Popen(
+                argv,
+                cwd=cwd,
+                env=env,
+                stdin=stdin_file,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                preexec_fn=prepare_child,
+                start_new_session=True,
+                pass_fds=active_sandbox.pass_fds() if active_sandbox else (),
+            )
+        except OSError as e:
+            # e.g. executable not found; strip the "[Errno 2] " prefix.  The
+            # message ends with a newline, as the one a shell prints for a
+            # command it can not find does, so whatever is printed next
+            # starts on its own line.
+            message = re.sub(r"^\[.*?\] *", "", str(e))
+            if debug > 1:
+                print("run failed:", message, file=sys.stderr)
+            return CommandResult(b"", (message + "\n").encode("UTF-8"), 2)
+        except subprocess.SubprocessError as e:
+            # an exception escaped prepare_child() in the child
+            from util import InternalError
+
+            raise InternalError(f"could not run {argv}: {e}") from e
+
+        started = time.monotonic()
+        output = _supervise(
+            process,
+            max_real_seconds,
+            max_stdout_bytes,
+            max_stderr_bytes,
+            max_rss_bytes,
+            debug,
+            report_resource_usage,
+        )
+        real_seconds = time.monotonic() - started
+    finally:
+        if not isinstance(stdin_file, int):  # i.e. not subprocess.DEVNULL
+            stdin_file.close()
+
+    returncode = process.returncode
+    if not output.real_time_exceeded:
+        if returncode == -signal.SIGXCPU:
+            output.stderr += (
+                f"Error: CPU limit of {max_cpu_seconds} seconds exceeded\n".encode()
+            )
+        elif returncode == -signal.SIGXFSZ:
+            output.stderr += f"Error: maximum file creation size of {max_file_size_bytes} bytes exceeded\n".encode()
+
+    if active_sandbox is not None:
+        failure = active_sandbox.error()
+        if failure and returncode == _SANDBOX_FAILED_STATUS:
+            raise _sandbox_error_class()(failure)
+        if failure and returncode == _COMMAND_NOT_FOUND_STATUS:
+            return CommandResult(b"", (failure + "\n").encode("UTF-8"), 2)
+
+    usage = (
+        ResourceUsage(output.peak_rss_bytes, real_seconds)
+        if report_resource_usage
+        else None
+    )
+    result = CommandResult(
+        bytes(output.stdout), bytes(output.stderr), returncode, usage
+    )
+    if debug > 1:
+        print("run returned", result, file=sys.stderr)
+    return result
+
+
+def kill_all_running() -> None:
+    """SIGKILL every process group started by run() that has not finished.
+
+    For a SIGINT handler: the student's program (and anything it forked)
+    should not outlive an interrupted autotest.
+
+    A signal handler runs on the main thread, which may be inside run() and
+    already holding the (non-reentrant) registry lock, so this must never
+    block on it.  The snapshot is taken without the lock if it cannot be
+    acquired immediately: list(set) is a single call under the GIL, so it
+    cannot see a half-updated set, and the lock only serialises writers.
+    """
+    acquired = _running_process_groups_lock.acquire(blocking=False)
+    try:
+        process_groups = list(_running_process_groups)
+    finally:
+        if acquired:
+            _running_process_groups_lock.release()
+    for pgid in process_groups:
+        _kill_process_group(pgid)
+
+
+def stop_all() -> None:
+    """For the SIGINT handler: refuse to start any more commands, then kill
+    those running.
+
+    Killing the running commands lets their tests finish, and with tests
+    running concurrently the pending tests would then start (creating
+    directories and processes) while the handler is removing the temporary
+    tree; the flag stops run() first so nothing new can appear.
+    """
+    _stopped.set()
+    kill_all_running()
+
+
+def stopped() -> bool:
+    """True once stop_all() has been called: no more commands may start."""
+    return _stopped.is_set()
+
+
+class _Limits:
+    """The resource limits to apply in the child before exec."""
+
+    def __init__(
+        self,
+        *,
+        max_cpu_seconds: int | None,
+        max_core_size: int | None,
+        max_stack_bytes: int | None,
+        max_rss_bytes: int | None,
+        max_file_size_bytes: int | None,
+        max_processes: int | None,
+        max_open_files: int | None,
+        nice: int,
+    ) -> None:
+        self.max_cpu_seconds = max_cpu_seconds
+        self.max_core_size = max_core_size
+        self.max_stack_bytes = max_stack_bytes
+        self.max_rss_bytes = max_rss_bytes
+        self.max_file_size_bytes = max_file_size_bytes
+        self.max_processes = max_processes
+        self.max_open_files = max_open_files
+        self.nice = nice
+
+    def apply(
+        self,
+    ) -> (
+        None
+    ):  # runs in the forked child before exec: test_cpu_limit_kills_with_sigxcpu_and_message
+        """Set the limits on the calling (child) process.
+
+        Only simple system calls are made here because this runs after fork
+        in a possibly multi-threaded parent, where taking a lock could
+        deadlock the child.
+        """
+        # core file size: 0 is the useful value, so it is always applied
+        if self.max_core_size is not None:
+            _set_rlimit(resource.RLIMIT_CORE, self.max_core_size)
+
+        # soft limit below the hard limit so the process gets SIGXCPU
+        # (and a message) rather than a bare SIGKILL
+        if self.max_cpu_seconds:
+            _set_rlimit(resource.RLIMIT_CPU, self.max_cpu_seconds)
+
+        if self.max_file_size_bytes:
+            _set_rlimit(resource.RLIMIT_FSIZE, self.max_file_size_bytes)
+
+        if self.max_stack_bytes:
+            _set_rlimit(resource.RLIMIT_STACK, self.max_stack_bytes)
+
+        if self.max_rss_bytes:
+            _set_rlimit(resource.RLIMIT_RSS, self.max_rss_bytes)
+
+        # note this is the user's total number of processes, not the child's
+        if self.max_processes:
+            _set_rlimit(resource.RLIMIT_NPROC, self.max_processes)
+
+        if self.max_open_files:
+            _set_rlimit(resource.RLIMIT_NOFILE, self.max_open_files + 1)
+
+        if self.nice:
+            os.nice(self.nice)
+
+
+def _set_rlimit(  # runs in the forked child before exec: test_file_size_limit_gives_sigxfsz_and_message
+    which: int, limit: int
+) -> None:
+    """setrlimit(which, (limit, limit + 1)), ignoring ValueError.
+
+    The soft limit is what the process hits (SIGXCPU/SIGXFSZ/EMFILE) and the
+    hard limit one above it lets the process raise its soft limit a little
+    or, for CPU, be sent SIGXCPU before the SIGKILL of the hard limit.
+    ValueError means a lower hard limit is already in force (from the login
+    session or an outer sandbox): the stricter limit stands.
+    """
+    try:
+        resource.setrlimit(which, (int(limit), int(limit) + 1))
+    except ValueError:
+        pass
+
+
+def _argv_for(command: str | Sequence[object]) -> list[str]:
+    """A string is run by a shell; a list is the argument vector itself."""
+    if isinstance(command, str):
+        return [shutil.which("bash") or "/bin/sh", "-c", command]
+    return [str(argument) for argument in command]
+
+
+def _stdin_file(stdin: str | bytes | None) -> int | IO[bytes]:
+    """Return the file to attach to the child's stdin.
+
+    A temporary file rather than a pipe: the child may never read its input,
+    or read it after producing more output than we buffer, and a pipe writer
+    in the parent would then need its own thread to avoid a deadlock.
+    """
+    if not stdin:
+        return subprocess.DEVNULL
+    stdin_file = tempfile.TemporaryFile()  # noqa: SIM115 - run() closes it
+    if isinstance(stdin, str):
+        # text, even when unicode_stdin is False: the flag records how the
+        # test specified its input and str can only be written encoded
+        stdin_file.write(stdin.encode("UTF-8"))
+    else:
+        # bytes arrive when unicode_stdin is False and are written as given
+        stdin_file.write(stdin)
+    stdin_file.seek(0)
+    return stdin_file
+
+
+class _Output:
+    """What run() collected from the child, and why collection stopped."""
+
+    def __init__(self) -> None:
+        self.stdout = bytearray()
+        self.stderr = bytearray()
+        # set when the wall-clock limit killed the process group; the
+        # CPU/file-size messages are then not also reported, as before
+        self.real_time_exceeded = False
+        # set once the process group has been killed by us for any reason
+        self.killed = False
+        # the largest total the sampler saw, when it was asked to measure
+        self.peak_rss_bytes = 0
+
+
+def _pipes(process: subprocess.Popen[bytes]) -> tuple[IO[bytes], IO[bytes]]:
+    """The child's stdout and stderr pipes.
+
+    run() gives Popen PIPE for both, so neither is None; the casts record
+    that for the type checker without adding a runtime check.
+    """
+    return cast(IO[bytes], process.stdout), cast(IO[bytes], process.stderr)
+
+
+class ResourceUsage:
+    """
+    What a command cost, measured rather than estimated.
+
+    peak_rss_bytes is the largest total the sampler saw across the command's
+    whole process group -- the same quantity max_rss_bytes is enforced
+    against, so a number reported here can be pasted into a specification.
+    It is sampled every _MEMORY_POLL_SECONDS, so a command which allocates
+    and exits between two samples reports less than it used; a command
+    shorter than one interval reports 0.
+
+    CPU time is deliberately absent.  getrusage(RUSAGE_CHILDREN) is
+    process-wide, so with tests on a thread pool it would report other
+    tests' work as this one's, and taking it from wait4 means owning the
+    reaping that Popen does here.  Wall clock is what this can measure
+    honestly.
+    """
+
+    __slots__ = ("peak_rss_bytes", "real_seconds")
+
+    def __init__(self, peak_rss_bytes: int = 0, real_seconds: float = 0.0):
+        self.peak_rss_bytes = peak_rss_bytes
+        self.real_seconds = real_seconds
+
+    def __repr__(self) -> str:
+        return (
+            f"ResourceUsage(peak_rss_bytes={self.peak_rss_bytes},"
+            f" real_seconds={self.real_seconds:.3f})"
+        )
+
+
+class CommandResult(tuple[bytes, bytes, int]):
+    """
+    (stdout, stderr, returncode), with what the command cost attached.
+
+    A tuple subclass, so every caller that unpacks three values -- which is
+    all of them -- is unchanged, while a caller which asked to measure reads
+    .usage.  Returning a fourth element instead would have broken each of
+    them.
+    """
+
+    usage: ResourceUsage | None
+
+    def __new__(
+        cls,
+        stdout: bytes,
+        stderr: bytes,
+        returncode: int,
+        usage: ResourceUsage | None = None,
+    ) -> CommandResult:
+        result = super().__new__(cls, (stdout, stderr, returncode))
+        result.usage = usage
+        return result
+
+
+def _supervise(
+    process: subprocess.Popen[bytes],
+    max_real_seconds: int | None,
+    max_stdout_bytes: int | None,
+    max_stderr_bytes: int | None,
+    max_rss_bytes: int | None,
+    debug: int,
+    measure_memory: bool = False,
+) -> _Output:
+    """Collect the child's output, enforce the wall-clock limit and reap it.
+
+    The child's process group is registered for kill_all_running() while it
+    runs, and is killed on exit either way so nothing the child forked
+    survives it.  On return process.returncode is set.
+    """
+    deadline = time.monotonic() + max_real_seconds if max_real_seconds else None
+    pgid = process.pid  # start_new_session made the child a group leader
+    with _running_process_groups_lock:
+        _running_process_groups.add(pgid)
+    output = _Output()
+    try:
+        _collect_output(
+            process,
+            pgid,
+            output,
+            deadline,
+            max_real_seconds,
+            max_stdout_bytes,
+            max_stderr_bytes,
+            max_rss_bytes,
+            measure_memory,
+        )
+        # Both pipes are closed but the child may still be running (it can
+        # close its own output), so the wall clock applies to its exit too.
+        if not output.killed and not _wait_without_reaping(process.pid, deadline):
+            _real_time_exceeded(output, pgid, max_real_seconds)
+        if output.real_time_exceeded and debug > 1:
+            print("real time limit exceeded", file=sys.stderr)
+    finally:
+        # The child is a zombie or being killed at this point, so its pid
+        # (and hence the group id) cannot yet have been recycled and killing
+        # the group only reaches processes it started.  It is unregistered
+        # before wait() reaps it: once reaped the pid is free for reuse and
+        # kill_all_running() must not be able to kill its new owner.
+        _kill_process_group(pgid)
+        with _running_process_groups_lock:
+            _running_process_groups.discard(pgid)
+        process.wait()
+        for pipe in _pipes(process):
+            pipe.close()
     return output
 
 
-async def run_coroutine(
-    loop,
-    command,
-    stdin=None,
-    # these default should be unused - see parameter_descriptions.py for actual defaults
-    max_real_seconds=None,
-    max_core_size=0,
-    max_cpu_seconds=60,
-    max_stack_bytes=32000000,
-    max_rss_bytes=100000000,
-    max_file_size_bytes=8192000,
-    max_processes=4096,  # unfortunately this is total per user processes not child processes
-    max_open_files=256,
-    max_stdout_bytes=1000000,
-    max_stderr_bytes=10000,
-    debug=0,
-    nice=0,
-    **parameters,
-):
-    exit_future = asyncio.Future(loop=loop)
+class _MemorySampler:
+    """
+    Sample a process group's memory on a timer, not on every wakeup.
 
-    def set_rlimit(which, limit):
+    select() returns as soon as a byte is readable, so a program which prints
+    steadily woke the supervisor once per read.  Sampling there meant a walk
+    of every process in /proc per read -- on a teaching server with thousands
+    of processes, on every worker thread at once, which cost more than running
+    the tests in parallel saved.
+    """
+
+    def __init__(self, max_rss_bytes: int | None, measure: bool = False):
+        self.limit = max_rss_bytes
+        # sampling costs a walk of /proc, so it happens only when a limit
+        # has to be enforced or the caller asked for the number
+        self.sampling = bool(max_rss_bytes) or measure
+        self.next_poll = time.monotonic() + _MEMORY_POLL_SECONDS
+        self.peak = 0
+
+    def exceeded(self, pgid: int) -> bool:
+        """True iff it is time to look and the group is over its limit."""
+        if not self.sampling:
+            return False
+        now = time.monotonic()
+        if now < self.next_poll:
+            return False
+        self.next_poll = now + _MEMORY_POLL_SECONDS
+        rss = _process_group_rss(pgid)
+        self.peak = max(self.peak, rss)
+        return self.limit is not None and self.limit > 0 and rss > self.limit
+
+
+def _collect_output(  # noqa: C901 - one branch per way a command is stopped: output, memory, wall clock
+    process: subprocess.Popen[bytes],
+    pgid: int,
+    output: _Output,
+    deadline: float | None,
+    max_real_seconds: int | None,
+    max_stdout_bytes: int | None,
+    max_stderr_bytes: int | None,
+    max_rss_bytes: int | None,
+    measure_memory: bool = False,
+) -> None:
+    """Read stdout and stderr until both close, a stream overflows, the
+    process group uses too much memory, or the wall clock runs out.
+
+    Reading stops as soon as the group is killed: a process that has
+    escaped the group could otherwise hold the pipe open forever.
+    """
+    stdout, stderr = _pipes(process)
+    streams = {
+        stdout.fileno(): (output.stdout, max_stdout_bytes, True),
+        stderr.fileno(): (output.stderr, max_stderr_bytes, False),
+    }
+    selector = selectors.DefaultSelector()
+    for fd in streams:
+        selector.register(fd, selectors.EVENT_READ)
+    sampler = _MemorySampler(max_rss_bytes, measure_memory)
+    try:
+        while selector.get_map():
+            timeout = None
+            if deadline is not None:
+                timeout = min(
+                    max(0.0, deadline - time.monotonic()), _MAX_SELECT_SECONDS
+                )
+            if sampler.sampling:
+                # a program that allocates without printing produces no
+                # readable event, so the wait is capped to keep sampling
+                timeout = min(
+                    _MEMORY_POLL_SECONDS,
+                    _MAX_SELECT_SECONDS if timeout is None else timeout,
+                )
+            for key, _events in selector.select(timeout):
+                data = os.read(key.fd, _READ_CHUNK_BYTES)
+                if not data:
+                    selector.unregister(key.fd)
+                    continue
+                buffer, limit, is_stdout = streams[key.fd]
+                if _append_limited(buffer, data, limit):
+                    continue
+                if is_stdout:
+                    # only stdout overflow gets a message, as it always has:
+                    # stderr is truncated silently so that the message does
+                    # not itself push a student's error output over its limit
+                    output.stderr += _too_much_output_error(limit)
+                output.killed = True
+                _kill_process_group(pgid)
+                return
+            if sampler.exceeded(pgid):
+                _memory_exceeded(output, pgid, max_rss_bytes)
+                return
+            if deadline is not None and time.monotonic() >= deadline:
+                _real_time_exceeded(output, pgid, max_real_seconds)
+                return
+    finally:
+        output.peak_rss_bytes = sampler.peak
+        selector.close()
+
+
+def _append_limited(buffer: bytearray, data: bytes, limit: int | None) -> bool:
+    """Append data to buffer keeping it within limit (None/0 is unlimited).
+    Returns False if data did not fit, after appending what did."""
+    if not limit:
+        buffer += data
+        return True
+    room = max(0, limit - len(buffer))
+    buffer += data[:room]
+    return len(data) <= room
+
+
+def _wait_without_reaping(pid: int, deadline: float | None) -> bool:
+    """Wait for the child to exit, until deadline (None waits forever).
+
+    The zombie is left unreaped so its pid, and so its process-group id,
+    stays reserved while the rest of the group is killed.  Returns False if
+    the deadline passed first.
+    """
+    delay = 0.0005
+    while True:
+        if os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT | os.WNOHANG) is not None:
+            return True
+        if deadline is not None and time.monotonic() >= deadline:
+            return False
+        time.sleep(delay)
+        delay = min(delay * 2, 0.05)
+
+
+def _kill_process_group(pgid: int) -> None:
+    """SIGKILL a process group; it may already be gone."""
+    try:
+        os.killpg(pgid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
+def _process_group_rss(pgid: int) -> int:
+    """Return the resident memory of every process in pgid, in bytes.
+
+    Linux has ignored RLIMIT_RSS since 2.4, so setrlimit cannot enforce
+    max_rss_bytes and this is what does.  The alternatives were rejected:
+    RLIMIT_AS and RLIMIT_DATA both count the address space that
+    address-sanitizer reserves, so they stop dcc's own programs from
+    starting, and a cgroup needs a delegated controller that an
+    unprivileged autotest on a teaching machine may not have.
+
+    The whole group is summed, not just the leader, because the process
+    that exhausts a machine is as likely to be one the test forked.  Shared
+    pages are counted once per process, so this over-estimates for a
+    program with many children; that errs towards stopping a program early
+    rather than letting it take the machine down.
+    """
+    total_pages = 0
+    for entry in os.listdir("/proc"):
+        if not entry.isdigit():
+            continue
         try:
-            # having soft limit < hard limit necessary to produce nice message from SIGXCPU
-            resource.setrlimit(which, (int(limit), int(limit) + 1))
+            with open(f"/proc/{entry}/stat", "rb") as f:
+                stat_line = f.read()
+        except OSError:
+            # the process exited while we were looking at it
+            continue
+        # the second field is the executable name in parentheses and may
+        # itself contain spaces and parentheses, so the fields that matter
+        # are counted from the last ')' rather than from the start
+        _, _, rest = stat_line.rpartition(b")")
+        fields = rest.split()
+        # after the name come state, ppid, pgrp, ... and rss is the 22nd
+        if len(fields) < _STAT_RSS_INDEX + 1:
+            continue
+        try:
+            if int(fields[_STAT_PGRP_INDEX]) != pgid:
+                continue
+            total_pages += int(fields[_STAT_RSS_INDEX])
         except ValueError:
-            # ignore value errors because they can result from a
-            # lower resource limit already being set
-            pass
+            continue
+    return total_pages * _PAGE_SIZE
 
-    def set_limits():
-        # don't set RLIMIT_DATA it breaks address-sanitizer
-        # don't set RLIMIT_VMEM it breaks memory-sanitizer
 
-        # The maximum size (in bytes) of a core file that the current process can create
-        set_rlimit(resource.RLIMIT_CORE, max_core_size)
+def _memory_exceeded(output: _Output, pgid: int, max_rss_bytes: int | None) -> None:
+    """Record that the memory limit was hit and kill the group."""
+    output.stderr += f"Error: memory limit of {max_rss_bytes} bytes exceeded\n".encode()
+    output.killed = True
+    _kill_process_group(pgid)
 
-        # The maximum amount of processor time (in seconds) that a process can use
-        set_rlimit(resource.RLIMIT_CPU, max_cpu_seconds)
 
-        # The maximum size of a file which the process may create.
-        set_rlimit(resource.RLIMIT_FSIZE, max_file_size_bytes)
+def _real_time_exceeded(
+    output: _Output, pgid: int, max_real_seconds: int | None
+) -> None:
+    """Record that the wall-clock limit was hit and kill the group."""
+    output.stderr += (
+        f"Error: real time limit of {max_real_seconds} seconds exceeded\n".encode()
+    )
+    output.real_time_exceeded = True
+    output.killed = True
+    _kill_process_group(pgid)
 
-        # The maximum size (in bytes) of the call stack for the current process.
-        set_rlimit(resource.RLIMIT_STACK, max_stack_bytes)
 
-        # TThe maximum resident set size that should be made available to the process.
-        set_rlimit(resource.RLIMIT_RSS, max_rss_bytes)
-
-        # The maximum number of processes the current process may create.
-        set_rlimit(resource.RLIMIT_NPROC, max_processes)
-
-        # The maximum number of open files
-        set_rlimit(resource.RLIMIT_NOFILE, max_open_files + 1)
-
-        if nice != 0:
-            os.nice(nice)
-
-    # Create the subprocess
-    # FIXME: There should be a parameter to control what shell to use
-    command = (
-        [
-            "/bin/sh" if shutil.which("bash") is None else shutil.which("bash"),
-            "-c",
-            command,
-        ]
-        if isinstance(command, str)
-        else command
+def _too_much_output_error(limit: int | None) -> bytes:
+    """The stdout-overflow message run_test.py keys on; byte-exact as before."""
+    return (
+        f"\nError too much output - maximum stdout bytes of {limit} exceeded.".encode()
     )
 
-    # subtle issue with providing string as input so just write it to a temporary file
-    if stdin:
-        # pylint: disable=consider-using-with
-        stdin_stream = tempfile.TemporaryFile()
-        if parameters["unicode_stdin"]:
-            stdin_stream.write(stdin.encode(locale.getpreferredencoding(False)))
-        else:
-            stdin_stream.write(stdin)
-        stdin_stream.seek(0)
-    else:
-        stdin_stream = subprocess.DEVNULL
-    process = loop.subprocess_exec(
-        lambda: SubprocessProtocol(exit_future, max_stdout_bytes, max_stderr_bytes),
-        *command,
-        preexec_fn=set_limits,
-        stdin=stdin_stream,
-    )
 
-    transport, protocol = await process
-    errors = []
-    if max_real_seconds:
+def _sandbox_error_class() -> type[Exception]:
+    """The exception for a sandbox that could not be set up.
 
-        def wall_clock_alarm(errors):
-            errors.append(
-                f"Error: real time limit of {max_real_seconds} seconds exceeded\n".encode(
-                    "utf-8"
-                )
-            )
-            transport.kill()
-            transport.close()
-            if debug > 1:
-                print("wall clock alarm", file=sys.stderr)
+    sandbox.py defines it; if that module is missing (this file is also used
+    stand-alone) an InternalError is the closest thing.
+    """
+    try:
+        from sandbox import SandboxError
+    except ImportError:
+        from util import InternalError
 
-        timer = threading.Timer(
-            max_real_seconds, lambda errors=errors: wall_clock_alarm(errors)
-        )
-        if debug > 1:
-            print(
-                "wall clock timer set for", max_real_seconds, "seconds", file=sys.stderr
-            )
-        timer.start()
-    # Wait for the subprocess exit using the process_exited() method
-    # of the protocol
-    await exit_future
-    if max_real_seconds:
-        timer.cancel()
-    transport.close()
-    if stdin:
-        stdin_stream.close()
-    (stdout, stderr) = protocol.process_streams[1:3]
-    exit_status = transport.get_returncode()
-    if errors:
-        stderr += b"".join(errors)
-    elif exit_status == -signal.SIGXCPU:
-        stderr += f"Error: CPU limit of {max_cpu_seconds} seconds exceeded\n".encode(
-            "utf-8"
-        )
-    elif exit_status == -signal.SIGXFSZ:
-        stderr += f"Error: maximum file creation size of {max_file_size_bytes} bytes exceeded\n".encode(
-            "utf-8"
-        )
-    if debug > 2:
-        print(
-            "run_corotine", stdout, stderr, transport.get_returncode(), file=sys.stderr
-        )
-    return (stdout, stderr, transport.get_returncode())
-
-
-class SubprocessProtocol(asyncio.SubprocessProtocol):
-    def __init__(self, exit_future, max_stdout_bytes, max_stderr_bytes, debug=0):
-        self.exit_future = exit_future
-        self.output = bytearray()
-        self.process_streams = (None, bytearray(), bytearray())
-        self.max_stream_bytes = (None, max_stdout_bytes, max_stderr_bytes)
-        self.finished = [False, False, False]
-        self.debug = debug
-
-    def pipe_data_received(self, fd, data):
-        if self.debug > 1:
-            print(f"pipe_data_received({fd})", file=sys.stderr)
-        n_bytes = len(data)
-        max_bytes = max(0, self.max_stream_bytes[fd] - len(self.process_streams[fd]))
-        self.process_streams[fd].extend(data[0:max_bytes])
-        if n_bytes > max_bytes:
-            if fd == 1 and not self.finished[1]:
-                self.process_streams[2].extend(
-                    f"\nError too much output - maximum stdout bytes of {self.max_stream_bytes[fd]} exceeded.".encode(
-                        "utf-8"
-                    )
-                )
-            self.finished = [True, True, True]
-            if self.debug > 1:
-                print(f"stream limit exceeded(fd={fd})", file=sys.stderr)
-            self.terminate()
-
-    def pipe_connection_lost(self, fd, exc):
-        if self.debug > 1:
-            print(f"pipe_connection_lost({fd})", file=sys.stderr)
-        self.finished[fd] = True
-        self.check_everything_finished()
-
-    def process_exited(self):
-        if self.debug > 1:
-            print("process_exited", file=sys.stderr)
-        self.finished[0] = True
-        self.check_everything_finished()
-
-    def check_everything_finished(self):
-        if all(self.finished):
-            if self.debug > 1:
-                print("finished", file=sys.stderr)
-            self.terminate()
-
-    def terminate(self):
-        try:
-            self.exit_future.set_result(True)
-        except Exception:
-            pass
+        return InternalError
+    return SandboxError
 
 
 if __name__ == "__main__":
-    #    print(run(sys.argv[1], inpuy=" ".join(sys.argv[2:]), max_cpu=1, debug=2))
     print(run(sys.argv[1:], max_cpu_seconds=10, max_real_seconds=30, debug=0))

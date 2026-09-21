@@ -1,0 +1,60 @@
+# Verdict changes reviewed and accepted for feat/sandbox-and-parallel,
+# against main, over the COMP1511, COMP1521 and COMP2041 26T2 activities,
+# with each course's _infra submodule checked out.
+#
+# Pass this to scripts/replay_activities.sh as REPLAY_APPROVED_CHANGES.  A
+# whole line must match, so an activity which moves somewhere else fails the
+# gate again even though its name is here.
+#
+# Every one of these is an improvement or a wash:
+#
+#   * about_me and twenty COMP2041 activities go from "could not be run" to a
+#     real result.  All of them are main clearing os.environ process-wide, so
+#     a staff pre_compile_command ran with the wrong environment and silently
+#     did nothing;
+#   * 23T2final2_q1 and 24T2final_q1 go from 0/4 to 4/4;
+#   * unique_files goes from no verdict at all to 8 of 8, because main cannot
+#     parse shared_test_directory;
+#   * reverse_file_bytes passes one more test;
+#   * rain moves from 68 failures reported as "execvp: No such file or
+#     directory" to "could not be run", which is the truth: its model
+#     solution does not link.  Both trees score it zero;
+#   * the COMP2041 activities which end at "0 passed / N failed" need tools or
+#     hosts this machine does not have (ffmpeg, image tools, the network).
+#     They scored zero under main too.
+#
+# An earlier version of this file had five more COMP1511 entries.  They were
+# not autotest's doing: the checkers of those activities are symbolic links
+# into an _infra submodule which was not checked out, so main died with an
+# internal error and no verdict while this branch reported a failed check.
+# With the submodule present both trees run the checkers and agree.
+about_me | 0 tests passed 0 tests failed  1 tests could not be run | 1 tests passed 0 tests failed 
+rain | 0 tests passed 68 tests failed | 0 tests passed 0 tests failed  68 tests could not be run
+reverse_file_bytes | 3 tests passed 4 tests failed | 4 tests passed 3 tests failed
+unique_files | (no verdict: autotest did not finish) | 8 tests passed 0 tests failed 
+23T2final2_q1 | 0 tests passed 4 tests failed | 4 tests passed 0 tests failed 
+24T2final_q1 | 0 tests passed 4 tests failed | 4 tests passed 0 tests failed 
+advanced_scraping_courses | 0 tests passed 0 tests failed  87 tests could not be run | 17 tests passed 70 tests failed
+balancing_numbers | 0 tests passed 0 tests failed  5 tests could not be run | 5 tests passed 0 tests failed 
+create_music | 0 tests passed 0 tests failed  1 tests could not be run | 0 tests passed 1 tests failed
+echon | 0 tests passed 0 tests failed  9 tests could not be run | 9 tests passed 0 tests failed 
+file_sizes | 0 tests passed 0 tests failed  1 tests could not be run | 1 tests passed 0 tests failed 
+grip | 0 tests passed 0 tests failed  34 tests could not be run | 0 tests passed 34 tests failed
+hello_files | 0 tests passed 0 tests failed  3 tests could not be run | 3 tests passed 0 tests failed 
+htm2html | 0 tests passed 0 tests failed  5 tests could not be run | 5 tests passed 0 tests failed 
+jpg2png | 0 tests passed 0 tests failed  2 tests could not be run | 0 tests passed 2 tests failed
+missing_include | 0 tests passed 0 tests failed  3 tests could not be run | 3 tests passed 0 tests failed 
+most_common_first_name | 0 tests passed 0 tests failed  2 tests could not be run | 2 tests passed 0 tests failed 
+most_lines | 0 tests passed 0 tests failed  2 tests could not be run | 2 tests passed 0 tests failed 
+mygit | 0 tests passed 0 tests failed  34 tests could not be run | 34 tests passed 0 tests failed 
+mygive | 0 tests passed 0 tests failed  25 tests could not be run | 0 tests passed 25 tests failed
+scraping_courses | 0 tests passed 0 tests failed  36 tests could not be run | 9 tests passed 27 tests failed
+shell_backup | 0 tests passed 0 tests failed  3 tests could not be run | 3 tests passed 0 tests failed 
+shell_create_integers_file | 0 tests passed 0 tests failed  3 tests could not be run | 3 tests passed 0 tests failed 
+shell_ls_identical | 0 tests passed 0 tests failed  6 tests could not be run | 6 tests passed 0 tests failed 
+shell_snapshot | 0 tests passed 0 tests failed  2 tests could not be run | 2 tests passed 0 tests failed 
+student_first_names | 0 tests passed 0 tests failed  2 tests could not be run | 2 tests passed 0 tests failed 
+tag_music | 0 tests passed 0 tests failed  9 tests could not be run | 0 tests passed 9 tests failed
+take | 0 tests passed 0 tests failed  25 tests could not be run | 0 tests passed 25 tests failed
+turnip | 0 tests passed 0 tests failed  25 tests could not be run | 0 tests passed 25 tests failed
+two_courses | 0 tests passed 0 tests failed  2 tests could not be run | 2 tests passed 0 tests failed 

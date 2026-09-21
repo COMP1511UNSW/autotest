@@ -1,5 +1,8 @@
 name: auto-pytest
 on: [push, pull_request]
+permissions:
+  actions: write
+  contents: read
 jobs:
   # job skipper in the case of concurrent push + pull_request trigger
   pre_job:
@@ -8,32 +11,36 @@ jobs:
       should_skip: ${{steps.skip_check.outputs.should_skip}}
     steps:
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@master
+        uses: fkirc/skip-duplicate-actions@v5.3.1
         with:
           concurrent_skipping: 'same_content'
           do_not_skip: '["push"]'
 
   # actual auto pytest
   main_job:
-    name: pytest
+    name: pytest (py${{ matrix.python-version }})
     needs: pre_job
     if: ${{needs.pre_job.outputs.should_skip != 'true'}}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11"]
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         if: github.event_name == 'pull_request'
         with:
           fetch-depth: 0
           ref: ${{github.event.pull_request.head.ref}}
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
         if: github.event_name == 'push'
         with:
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.9
+          python-version: ${{matrix.python-version}}
           architecture: x64
 
       - name: Install pipenv
@@ -41,16 +48,41 @@ jobs:
           python -m pip install --upgrade pipenv wheel
 
       - id: cache-pipenv
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         with:
           path: ~/.local/share/virtualenvs
-          key: ${{runner.os}}-pipenv-${{hashFiles('**/Pipfile.lock')}}
+          key: ${{runner.os}}-py${{matrix.python-version}}-pipenv-${{hashFiles('**/Pipfile.lock')}}
 
       - name: Install dependencies
         if: steps.cache-pipenv.outputs.cache-hit != 'true'
         run: |
-          pipenv install --deploy --dev
+          # --python: use the interpreter set up above rather than the one
+          # the Pipfile [requires], which is not installed on the runner
+          pipenv --python "$(which python)" install --dev
+
+      # No "|| true": the coverage gate assumes a host which can build the
+      # sandbox, so a runner where this stops working must fail here, with
+      # a message naming user namespaces, rather than later as an
+      # unexplained drop in coverage.
+      - name: Allow unprivileged user namespaces (needed by the sandbox on Ubuntu 24.04+)
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      - name: Check that this runner can build a sandbox
+        run: |
+          pipenv run python -c 'import sandbox, sys; r = sandbox.probe(sandbox.config_from_parameters({})); sys.exit(0 if r is None else f"no sandbox on this runner: {r}")'
 
       - name: Run test suite
+        env:
+          # tests/environment expects it when autotest is run on that fixture
+          SAMPLE_ENVIRONMENT_VARIABLE: sample_value
+          # the checkout above uses fetch-depth: 0, so the comparison
+          # against main must run rather than skip
+          AUTOTEST_REQUIRE_MAIN_COMPARISON: "1"
         run: |
-          pipenv run test -v
+          VENV_BIN="$(pipenv --venv)/bin"
+          if [ "${{matrix.python-version}}" = "3.11" ]; then
+            pipenv run make VENV_BIN="$VENV_BIN" coverage
+          else
+            pipenv run make VENV_BIN="$VENV_BIN" test
+          fi

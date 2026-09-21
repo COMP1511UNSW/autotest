@@ -8,7 +8,14 @@
 # 	4) code to finalize and update the parameter value possible depending on other parameters
 # 	5) where this parameter must be set for all tests
 
-import collections, copy, os, re, string, sys
+import collections
+import copy
+import os
+import re
+import string
+import sys
+from typing import Union
+
 from util import TestSpecificationError
 
 # parameters are set to any values explicity set in the specification
@@ -66,7 +73,7 @@ class Parameter:
         return markdown
 
 
-PARAMETER_LIST = []
+PARAMETER_LIST: list[Union[Parameter, str]] = []
 
 
 def heuristically_infer_program(parameters):
@@ -76,7 +83,8 @@ def heuristically_infer_program(parameters):
     command = parameters.get("command", "")
     command_word = command
     if isinstance(command_word, list):
-        command_word = str(command_word[0])
+        # an empty list is a missing command, reported as such later
+        command_word = str(command_word[0]) if command_word else ""
     command_word = re.sub(r"\s.*", "", str(command_word))
     bare_command_word = re.sub(r".*/", "", command_word)
     files = parameters.get("files", [])
@@ -87,22 +95,26 @@ def heuristically_infer_program(parameters):
     # it is not documented and its behaviour should not be relied on
     # instead the parameter program should be specified
 
-    if bare_command_word and [f for f in files if f.startswith(bare_command_word)]:
+    if (
+        bare_command_word and [f for f in files if f.startswith(bare_command_word)]
+    ) or bare_command_word in parameters.get("compiler_args", ""):
         return bare_command_word
-    elif bare_command_word in parameters.get("compiler_args", ""):
-        return bare_command_word
-    elif re.match(r"^./[\w\-]+$", command_word):
+    if re.match(r"^./[\w\-]+$", command_word):
         return command_word[2:]
-    elif files:
-        return re.sub(r"\.(c|cc|h)?$", "", str(files[0]), flags=re.I)
-    elif bare_command_word:
+    if files:
+        return re.sub(r"\.(c|cc|h)?$", "", str(files[0]), flags=re.IGNORECASE)
+    if bare_command_word:
         return bare_command_word
-    else:
-        # use of label for backwards compatibility only
-        return re.sub("[_0-9]*$", "", str(parameters.get("label", "")))
+    # use of label for backwards compatibility only
+    return re.sub("[_0-9]*$", "", str(parameters.get("label", "")))
 
 
 PARAMETER_LIST += [
+    """
+        Boolean parameters accept any value.
+        The empty string, and strings starting with `0`, `f` or `n` (`0`, `false`, `no`, `n`, ...)
+        and `off` (ignoring case) are false; any other string is true.
+    """,
     "### Parameters specifying command to be run",
     Parameter(
         "program",
@@ -126,16 +138,16 @@ PARAMETER_LIST += [
 def finalize_command(parameter_name, value, parameters):
     if isinstance(value, list):
         if parameter_name == "command":
-            deprocated_shell_parameter_name = "shell"
+            deprecated_shell_parameter_name = "shell"
         else:
-            deprocated_shell_parameter_name = parameter_name + "_shell"
+            deprecated_shell_parameter_name = parameter_name + "_shell"
         strs = [str(a) for a in value]
-        if parameters.get(deprocated_shell_parameter_name, None):
+        if parameters.get(deprecated_shell_parameter_name, None):
             return " ".join(strs)
         return strs
-    elif isinstance(value, str):
+    if isinstance(value, str):
         return value
-    elif value is None:
+    if value is None:
         return []
     raise TestSpecificationError(
         f"invalid value for parameter '{parameter_name}': {value}"
@@ -165,7 +177,7 @@ PARAMETER_LIST += [
         default=False,
         show_in_documentation=False,
         description="""
-            Deprocated: if **`shell`** is true, **`command`** is run by passing it to a shell.
+            Deprecated: if **`shell`** is true, **`command`** is run by passing it to a shell.
         """,
     ),
 ]
@@ -184,10 +196,9 @@ def heuristically_default_files(parameters):
     program = parameters.get("program", "")
     if "." in program:
         return [program]
-    elif program:
+    if program:
         return [program + ".c"]
-    else:
-        return []
+    return []
 
 
 PARAMETER_LIST += [
@@ -203,7 +214,7 @@ PARAMETER_LIST += [
             If **`files`** is not specified it is set to the parameter **`program`**
             with a `.c`  appended iff **`program`** does not contain a '.'.<br>
             For example if **`files`** is not specified and **`program`** == **`hello`**, **`files`** will be set to `hello.c`,
-            but if **`program`** == `hello.sh` **`files`** will be set to `hello.c`
+            but if **`program`** == `hello.sh` **`files`** will be set to `hello.sh`
         """,
     ),
     Parameter(
@@ -227,7 +238,12 @@ PARAMETER_LIST += [
         "pre_compile_command",
         finalize=finalize_command,
         description="""
-            If set **`pre_compile_command`** is executed once before compilation.<br>
+            If set **`pre_compile_command`** is executed before compilation, in
+            the test's own copy of the test directory.<br>
+            When the tests being run have different **`pre_compile_command`**s,
+            every distinct command appearing earlier in the specification runs
+            there first, so one command can run many times in a run: write it
+            so that running it again is harmless.<br>
             This is invisible to the user, unless **`pre_compile_command`** produces output.<br>
             Compilation does not occur if **`pre_compile_command`** has a non-zero exit-status.<br>
             If **`pre_compile_command`** is a string, it is passed to a shell.<br>
@@ -239,13 +255,15 @@ PARAMETER_LIST += [
         show_in_documentation=False,
         default=False,
         description="""
-            Deprocated: execute **`pre_compile_command`** by passing it to a shell.<br>
+            Deprecated: execute **`pre_compile_command`** by passing it to a shell.<br>
         """,
     ),
 ]
 
 
-def finalize_compiler_checker_list(name, compilers_or_checkers, parameters):
+def finalize_compiler_checker_list(  # noqa: C901 - one branch per way the parameter can be written
+    name, compilers_or_checkers, parameters
+):
     """
     verify list of checker or compilers for command
     if not set use default based on file suffix of first file in test
@@ -254,8 +272,7 @@ def finalize_compiler_checker_list(name, compilers_or_checkers, parameters):
         files = parameters["files"]
         if files:
             suffix = os.path.splitext(files[0])[1]
-            if suffix.startswith("."):
-                suffix = suffix[1:]
+            suffix = suffix.removeprefix(".")
             compilers_or_checkers = parameters["default_" + name].get(suffix, [])
         else:
             compilers_or_checkers = []
@@ -275,6 +292,10 @@ def finalize_compiler_checker_list(name, compilers_or_checkers, parameters):
                 f"invalid value for parameter '{name}': {compilers_or_checkers}"
             )
         if isinstance(command, str):
+            # a whole element "%" is the program: compiler_args is a flat
+            # list of strings, where "%" is documented as the program
+            if command == "%":
+                compilers_or_checkers[index] = program
             continue
         if not isinstance(command, list):
             raise TestSpecificationError(
@@ -346,7 +367,7 @@ PARAMETER_LIST += [
             List of checkers.  Each checker is run once for each file supplied for a test.  The filename is appended as argument.<br>
             Checkers are only run once for a file.<br>
             If checker is a string it is run by passing it to a shell.
-            Deprocated: if the value is a string containing ':' a list is formed by splitting the string at the ':'s.
+            Deprecated: if the value is a string containing ':' a list is formed by splitting the string at the ':'s.
         """,
     ),
     Parameter(
@@ -382,7 +403,7 @@ PARAMETER_LIST += [
             ```
             The first element of this sub-list where the compiler can be found in PATH is used.<br>
             If compiler is a string it is run by passing it to a shell.<br>
-            Deprocated: if the value is a string containing ':' a list is formed by splitting the string at the ':'s.
+            Deprecated: if the value is a string containing ':' a list is formed by splitting the string at the ':'s.
         """,
     ),
     Parameter(
@@ -409,10 +430,12 @@ PARAMETER_LIST += [
 ]
 
 
-def finalize_compile_commands(_name, value, parameters):
+def finalize_compile_commands(  # noqa: C901, PLR0912 - one branch per way the parameter can be written
+    _name, value, parameters
+):
     # parameter has been set directly
     if isinstance(value, str):
-        return [str]
+        return [value]
 
     if isinstance(value, list):
         compile_commands = []
@@ -446,14 +469,18 @@ def finalize_compile_commands(_name, value, parameters):
                 if "-o" in command_as_list and "-o" in compiler_args:
                     index = command_as_list.index("-o")
                     command = command_as_list[0:index] + command_as_list[index + 2 :]
-            else:
-                if "-o" not in command_as_list and program not in command_as_list:
-                    compiler_args = ["-o", program]
+            elif "-o" not in command_as_list and program not in command_as_list:
+                compiler_args = ["-o", program]
 
         if isinstance(command, str):
-            command += " ".join(compiler_args)
+            if compiler_args:
+                # rstrip because a specification written before autotest put a
+                # separator here may end the compiler with a space of its own:
+                # 42 of the COMP1521 26T2 activities do, and without this the
+                # compile command shown to a student has a double space in it
+                command = command.rstrip() + " " + " ".join(compiler_args)
         else:
-            command += compiler_args
+            command = command + compiler_args
 
         compile_commands.append(command)
     return compile_commands
@@ -478,7 +505,8 @@ PARAMETER_LIST += [
         description="""
             If set **`setup_command`** is executed once before a test.<br>
             This is invisible to the user, unless **`setup_command`** produces output.<br>
-            The test is not run if  **`setup_command`** has a non-zero exit-status.<br>
+            The exit status of **`setup_command`** is ignored: the test is run regardless.<br>
+            It runs in the test's own copy of the test directory (and in the sandbox, see **`sandbox_support_commands`**).<br>
             If **`setup_command`** is a string, it is passed to a shell.
             If **`setup_command`** is a list, it is executed directly.
         """,
@@ -488,7 +516,7 @@ PARAMETER_LIST += [
         show_in_documentation=False,
         default=False,
         description="""
-            Deprocated: execute **`setup_command_shell`** by passing it to a shell.<br>
+            Deprecated: execute **`setup_command_shell`** by passing it to a shell.<br>
         """,
     ),
     "### Parameters specifying inputs for test",
@@ -512,13 +540,13 @@ def finalize_stream(parameter_name, stream_contents, parameters):
     All three can be specified as a string or as list of filename.
 
     For backwards compatibility
-    The deprocated parameters stdin_file, expected_stdin_file, expected_stdout_file are also handled.
+    The deprecated parameters stdin_file, expected_stdin_file, expected_stdout_file are also handled.
     As checking for a file named test_label.stdin etc
     """
     stream_name = parameter_name.replace("expected_", "")
-    deprocated_file_name = parameters.get(f"{parameter_name}_file", "")
-    if not stream_contents and deprocated_file_name:
-        stream_contents = [deprocated_file_name]
+    deprecated_file_name = parameters.get(f"{parameter_name}_file", "")
+    if not stream_contents and deprecated_file_name:
+        stream_contents = [deprecated_file_name]
     if not stream_contents and "label" in parameters:
         filename = f'{parameters["label"]}.{stream_name}'
         if os.path.exists(
@@ -563,7 +591,7 @@ PARAMETER_LIST += [
         finalize=finalize_stream,
         description="""
             Bytes supplied on stdin for test.<br>
-            Deprocated: stdin is not specified and the file *test_label*`.stdin` exists, its contents are used.<br>
+            Deprecated: stdin is not specified and the file *test_label*`.stdin` exists, its contents are used.<br>
             Not yet implemented: if value is a list it is treated as list of pathname of file(s) containing bytes.
         """,
     ),
@@ -608,12 +636,12 @@ PARAMETER_LIST += [
         default="",
         show_in_documentation=False,
         description="""
-            Deprocated: file supplied on stdin for test.<br>
+            Deprecated: file supplied on stdin for test.<br>
         """,
     ),
     Parameter(
         "__environment_original",
-        default=lambda p: dict((k, v) for (k, v) in os.environ.items()),
+        default=lambda _parameters: dict(os.environ.items()),
         show_in_documentation=False,
         description="""
             Internal variable holding original environment.
@@ -631,11 +659,11 @@ PARAMETER_LIST += [
     ),
     Parameter(
         "__environment_filtered",
-        default=lambda p: dict(
-            (k, v)
+        default=lambda p: {
+            k: v
             for (k, v) in os.environ.items()
             if re.fullmatch(p["environment_kept"], k)
-        ),
+        },
         show_in_documentation=False,
         description="""
             Internal variable holding filtered original environment.
@@ -647,7 +675,27 @@ PARAMETER_LIST += [
 def finalize_dict_of_strings(name, value, _parameters):
     if not isinstance(value, dict):
         raise TestSpecificationError(f"invalid value for parameter '{name}': {value}")
-    return dict((str(k), str(v)) for (k, v) in value.items())
+    return {str(k): str(v) for (k, v) in value.items()}
+
+
+def default_environment(parameters):
+    """
+    the default for environment: later dictionaries win, as with the dict
+    union operator.  The defaults are computed before any parameter is
+    finalized, so the dicts are checked here: unpacking a wrong-typed
+    environment_set would otherwise be reported as a TypeError about
+    mappings instead of naming the parameter.
+    """
+    for name in ("environment_base", "environment_set"):
+        if not isinstance(parameters[name], dict):
+            raise TestSpecificationError(
+                f"invalid value for parameter '{name}': {parameters[name]}"
+            )
+    return {
+        **parameters["__environment_filtered"],
+        **parameters["environment_base"],
+        **parameters["environment_set"],
+    }
 
 
 PARAMETER_LIST += [
@@ -658,8 +706,9 @@ PARAMETER_LIST += [
             "LC_NUMERIC": "POSIX",
             "PERL5LIB": ".",
             "HOME": ".",
-            "PATH": "/bin:/usr/bin:/usr/local/bin:.:"
-            + p["__environment_original"].get("PATH", ""),
+            "PATH": "/bin:/usr/bin:/usr/local/bin:"
+            + p["__environment_original"].get("PATH", "")
+            + ":.",
         },
         finalize=finalize_dict_of_strings,
         description="""
@@ -672,16 +721,18 @@ PARAMETER_LIST += [
                 'LC_NUMERIC' : 'POSIX',
                 'PERL5LIB' : '.',
                 'HOME' : '.',
-                'PATH' : '/bin:/usr/bin:/usr/local/bin:.:$PATH',
+                'PATH' : '/bin:/usr/bin:/usr/local/bin:$PATH:.',
                 },
             ```
-            where `$PATH` is the original value of `PATH`.
+            where `$PATH` is the original value of `PATH`.<br>
+            The test directory (`.`) is searched last, so a file supplied for a test
+            can not shadow a program found elsewhere in `PATH`.
 
             The environment  variables in **`environment_base`** are set and then,
-            environment  variables specified in **`environment_set`** are set.<bt>
-            This parameter should not normally be used.<bt>
-            The parameter **`environment_set`** should normally be used instead of this parameter.<bt>
-            It is only necessary to specify **`environment_base`** if these variables need to be unset rather than given different values for a test.<bt>
+            environment  variables specified in **`environment_set`** are set.<br>
+            This parameter should not normally be used.<br>
+            The parameter **`environment_set`** should normally be used instead of this parameter.<br>
+            It is only necessary to specify **`environment_base`** if these variables need to be unset rather than given different values for a test.<br>
         """,
     ),
     Parameter(
@@ -696,20 +747,14 @@ PARAMETER_LIST += [
     ),
     Parameter(
         "environment",
-        #       better but needs python 3.9
-        # 		default = lambda test: test['__environment_filtered'] | test['environment_base'] | test['environment_set'],
-        default=lambda test: {
-            **test["__environment_filtered"],
-            **test["environment_base"],
-            **test["environment_set"],
-        },
+        default=default_environment,
         finalize=finalize_dict_of_strings,
         description="""
             Dict specifying all environment variables for this test.<br>
             This parameter should not normally be specified,
             **`environment_set`** will serve most purposes.<br>
             By default **`environment`** is formed by taking original environment variables provided to autotest,<br>
-            removing all but those matching the regex in **`environment_variables_kept`**,<br>
+            removing all but those matching the regex in **`environment_kept`**,<br>
             setting any variables specified in **`environment_base`** and then<br>
             setting any variables specified in **`environment_set`**.
 
@@ -722,7 +767,7 @@ PARAMETER_LIST += [
         description="""
             Bytes expected on stdout for this test.<br>
             If value is a list it is treated as list of pathname of file(s) containing expected bytes.<br>
-            Deprocated: if **`expected_stdout`** is not specified and the file *test_label*`.expected_stdout` exists,
+            Deprecated: if **`expected_stdout`** is not specified and the file *test_label*`.stdout` exists,
             its contents are used.<br>
             Not yet implemented: handling of non-unicode output.<br>
         """,
@@ -732,7 +777,7 @@ PARAMETER_LIST += [
         show_in_documentation=False,
         default="",
         description="""
-            Deprocated: pathname of file containing bytes expected on stdout for this test.
+            Deprecated: pathname of file containing bytes expected on stdout for this test.
         """,
     ),
     Parameter(
@@ -741,7 +786,7 @@ PARAMETER_LIST += [
         description="""
             Bytes expected on stderr for this test.<br>
             If value is a list it is treated as list of pathname of file(s) containing expected bytes.<br>
-            Deprocated: if **`expected_stderr`** is not specified and the file *test_label*`.stderr` exists,
+            Deprecated: if **`expected_stderr`** is not specified and the file *test_label*`.stderr` exists,
             its contents are used.<br>
             Not yet implemented: handling of non-unicode output.
         """,
@@ -751,7 +796,7 @@ PARAMETER_LIST += [
         show_in_documentation=False,
         default="",
         description="""
-            Deprocated: pathname of file containing bytes expected on stderr for this test.
+            Deprecated: pathname of file containing bytes expected on stderr for this test.
         """,
     ),
     Parameter(
@@ -834,8 +879,7 @@ def finalize_max_bytes(name, value, parameters):
     len_expected = len(parameters.get(expected_stream, ""))
     if value is None:
         return max(min(10000000, 10 * len_expected), 10000, 2 * len_expected)
-    else:
-        return max(len_expected, int(value))
+    return max(len_expected, int(value))
 
 
 PARAMETER_LIST += [
@@ -843,15 +887,20 @@ PARAMETER_LIST += [
         "max_stdout_bytes",
         finalize=finalize_max_bytes,
         description="""
-            Maximum number of bytes that can be written to *stdout*.
-
+            Maximum number of bytes that can be written to *stdout*.<br>
+            A value below the length of **`expected_stdout`** is raised to it,
+            so `0` means no limit only when no output is expected.<br>
+            If not specified, a limit is chosen based on the size of **`expected_stdout`**.
         """,
     ),
     Parameter(
         "max_stderr_bytes",
         finalize=finalize_max_bytes,
         description="""
-            Maximum number of bytes that can be written to *stderr*.
+            Maximum number of bytes that can be written to *stderr*.<br>
+            A value below the length of **`expected_stderr`** is raised to it,
+            so `0` means no limit only when no output is expected.<br>
+            If not specified, a limit is chosen based on the size of **`expected_stderr`**.
         """,
     ),
     Parameter(
@@ -881,28 +930,68 @@ PARAMETER_LIST += [
         "max_stack_bytes",
         default=32000000,
         description="""
-            Maximum stack size in bytes.
+            Maximum stack size in bytes (0 for no limit).
+        """,
+    ),
+    Parameter(
+        "report_resource_usage",
+        default=False,
+        description="""
+            If true, autotest measures what each test cost and prints a table
+            after the results.  The command-line option is **`--stats`**.<br>
+            Peak memory is the largest total autotest saw across the test's
+            whole process group, which is the same quantity **`max_rss_bytes`**
+            is enforced against, so a number in this table can be pasted into
+            a specification.<br>
+            It is sampled five times a second, so a test which allocates and
+            exits between two samples reports less than it used, and a test
+            shorter than a fifth of a second reports 0.<br>
+            CPU time is not reported: the only ways to obtain it here are
+            process-wide, and would attribute other tests' work to this one
+            when tests run concurrently.<br>
+            The table is printed once for the run, so this must be set as a
+            global parameter: on a test line the test pays to be measured and
+            nothing is printed.
         """,
     ),
     Parameter(
         "max_rss_bytes",
-        default=100000000,
+        default=1000000000,
         description="""
-            Maximum resident set size in bytes.
+            Maximum resident memory in bytes for the test and everything it starts
+            (0 for no limit).
+
+            Unlike the other limits this one is not enforced by `setrlimit`:
+            Linux has ignored `RLIMIT_RSS` since 2.4, so for years this parameter
+            did nothing at all and a single program could exhaust a teaching
+            machine's memory.  Autotest now adds up the resident memory of the
+            test's process group a few times a second and stops it when it goes
+            over.  A program can therefore exceed the limit briefly before it is
+            stopped, and memory shared between a program and its children is
+            counted once for each of them.
+
+            The default is deliberately generous, because no existing test
+            specification sets this parameter and every test has until now
+            inherited a limit that did nothing.  It was chosen by measuring the
+            COMP1511, COMP1521 and COMP2041 activities: the heaviest legitimate
+            test found needs a little under 512MB to parse 100000 nested JSON
+            arrays, while the runaway that prompted the work reached 8GB.  Set
+            it lower for an exercise where a student's program has no reason to
+            use much memory.
         """,
     ),
     Parameter(
         "max_file_size_bytes",
         default=8192000,
         description="""
-            Maximum size of any file created in bytes.
+            Maximum size of any file created in bytes (0 for no limit).
         """,
     ),
     Parameter(
         "max_processes",
         default=4096,
         description="""
-            Maximum number of processes the current process may create.
+            Maximum number of processes the current process may create (0 for no limit).<br>
             Note: unfortunately this is total per user processes not child processes
         """,
     ),
@@ -910,7 +999,7 @@ PARAMETER_LIST += [
         "max_open_files",
         default=256,
         description="""
-            Maximum number of files that can be simultaneously open
+            Maximum number of files that can be simultaneously open (0 for no limit).
         """,
     ),
     " ## Parameters controlling comparison of expected to actual output",
@@ -946,7 +1035,7 @@ PARAMETER_LIST += [
     Parameter(
         "ignore_characters",
         default="",
-        finalize=lambda name, value, parameters: "".join(
+        finalize=lambda _name, value, parameters: "".join(
             set(value + string.whitespace if parameters["ignore_whitespace"] else value)
             - set("\n")
         ),
@@ -983,7 +1072,7 @@ PARAMETER_LIST += [
     "### Parameters controlling information printed about test",
     Parameter(
         "colorize_output",
-        default=lambda parameters: sys.stdout.isatty(),
+        default=lambda _parameters: sys.stdout.isatty(),
         required_type=bool,
         description="""
             If true highlight parts of output using ANSI colour sequences.
@@ -997,15 +1086,13 @@ def default_description(parameters):
     command = parameters["command"]
     if isinstance(command, list):
         return " ".join(drepr(p) for p in command)
-    else:
-        return drepr(command)
+    return drepr(command)
 
 
 def drepr(s):
     if isinstance(s, str) and s.isascii() and s.isprintable() and " " not in s:
         return s
-    else:
-        return repr(s)
+    return repr(s)
 
 
 PARAMETER_LIST += [
@@ -1106,10 +1193,25 @@ def finalize_dcc_output_checking(_name, value, parameters):
     if value is not None and not value_to_bool(value):
         return False
 
+    not_set = value is None or value == "" or str(value).lower()[0:1] == "a"
+
+    # Off by default when marking.  dcc compares the output itself, which
+    # means autotest hands it the answer in DCC_EXPECTED_STDOUT -- and the
+    # program being tested can read its own environment.  Four lines of C
+    # which print getenv("DCC_EXPECTED_STDOUT") pass every test.
+    #
+    # Nothing can hide it from a student running the exercise on their own
+    # account, because autotest reads the specification as them.  Marking is
+    # the one configuration where it can be kept back, and the one where it
+    # matters.  A specification that wants dcc's diff while marking can ask
+    # for it explicitly and this branch does not fire.
+    if parameters.get("marking") and not_set:
+        return False
+
     # dcc_output_checking not explicitly set
     # so use it if it is a simple execution of a C binary
     # more tests needed here
-    if (value is None or value == "" or str(value).lower()[0:1] == "a") and (
+    if not_set and (
         len(parameters["files"]) != 1
         or not parameters["files"][0].endswith(".c")
         or parameters["expected_stderr"]
@@ -1122,9 +1224,16 @@ def finalize_dcc_output_checking(_name, value, parameters):
     ):
         return False
 
-    for (
-        p
-    ) in "expected_stdout ignore_case compare_only_characters ignore_characters ignore_trailing_whitespace ignore_whitespace ignore_blank_lines max_stdout_bytes".split():
+    for p in [
+        "expected_stdout",
+        "ignore_case",
+        "compare_only_characters",
+        "ignore_characters",
+        "ignore_trailing_whitespace",
+        "ignore_whitespace",
+        "ignore_blank_lines",
+        "max_stdout_bytes",
+    ]:
         dcc_equivalent = "DCC_" + p.upper().replace("WHITESPACE", "WHITE_SPACE")
         value = str(parameters.get(p, ""))
         parameters["environment"][dcc_equivalent] = value
@@ -1134,11 +1243,31 @@ def finalize_dcc_output_checking(_name, value, parameters):
 
 PARAMETER_LIST += [
     Parameter(
+        "marking",
+        default=False,
+        description="""
+            True when autotest was run with **`-m`**, which selects a
+            specification's automarking tests.<br>
+            Set by the command line, not normally by a specification.  It
+            turns **`dcc_output_checking`** off by default, because that
+            parameter passes the expected output to the test in
+            `DCC_EXPECTED_STDOUT`, where the program being tested can read
+            it.
+        """,
+    ),
+    Parameter(
         "dcc_output_checking",
         finalize=finalize_dcc_output_checking,
         description="""
             Use dcc's builtin output checking to check for tests's expected output.
-            This is done by setting several environment variables for the test
+            This is done by setting several environment variables for the test.<br>
+            If not set explicitly it is used only for a simple test of a single
+            `.c` file (no **`expected_stderr`**, **`compiler_args`** or
+            **`postprocess_output_command`**), and never when **`marking`** is
+            true, because it passes the expected output to the test in
+            `DCC_EXPECTED_STDOUT` where the program being tested can read it.<br>
+            A specification which wants dcc's diff while marking must set
+            `dcc_output_checking=1`.
         """,
     ),
     "### Miscellaneous parameters",
@@ -1179,55 +1308,147 @@ PARAMETER_LIST += [
     ),
 ]
 
-UNSHARE_COMMAND = [
-    "/usr/bin/unshare",
-    "--cgroup",
-    "--fork",
-    "--ipc",
-    "--map-root-user",
-    "--mount",
-    "--net",
-    "--pid",
-    "--user",
-    "--time",
-    "--uts",
-]
+
+def finalize_sandbox(_name, value, _parameters):
+    """
+    Normalise the sandbox parameter to True, False or the string "auto".
+
+    The value usually arrives as a string (from tests.txt or -P) and marking
+    wrappers write things like sandbox=required or sandbox=yes, so anything
+    true-ish means "required" and anything false-ish means "disabled".
+    "auto" is kept as a string so the sandbox code can tell it apart from an
+    explicit request and downgrade to a warning when the host lacks support.
+    """
+    if value is None:
+        return "auto"
+    if isinstance(value, str) and value.strip().lower() == "auto":
+        return "auto"
+    return value_to_bool(value)
+
+
+def finalize_stability_runs(name, value, _parameters):
+    """
+    Turn stability_runs into an integer of at least 1.
+
+    0 and negative values mean "off" rather than "no runs at all", which is
+    what a spec author writing stability_runs=0 to disable it means.
+    """
+    try:
+        count = int(value)
+    except (TypeError, ValueError) as e:
+        raise TestSpecificationError(
+            f"invalid value for parameter '{name}': {value}"
+        ) from e
+    return max(1, count)
+
+
+def finalize_parallel_tests(name, value, _parameters):
+    """
+    Turn parallel_tests into a positive integer.
+
+    0 (or a negative value) means "one test per CPU": resolved here so the
+    runner never has to special-case it.  os.cpu_count() can be None on
+    unusual platforms, in which case running tests one at a time is the safe
+    choice.
+    """
+    try:
+        count = int(value)
+    except (TypeError, ValueError) as e:
+        raise TestSpecificationError(
+            f"invalid value for parameter '{name}': {value}"
+        ) from e
+    if count <= 0:
+        count = os.cpu_count() or 1
+    return count
 
 
 PARAMETER_LIST += [
+    "### Parameters controlling sandboxing and parallelism",
     Parameter(
         "sandbox",
-        default=None,
+        default="auto",
+        finalize=finalize_sandbox,
         description="""
-           Run tests within a sandbox - currently requires /usr/bin/unshare.
-           Deliberate escape from sandbox may be possible.
-           Only one sandbox is used for all tests.  This parameter must be set as a global parameter.
+            Run each test (and, if **`sandbox_support_commands`** is true, compilers, checkers
+            and setup commands) inside an unprivileged Linux user-namespace sandbox.<br>
+            Inside the sandbox only system directories are visible (read-only, see **`sandbox_read_only_mount_base`**),
+            the test directory is read-write, `/tmp` is a private directory (see **`sandbox_tmp_bytes`**),
+            `/dev` is minimal, `/proc` is fresh, and there is no network access unless **`sandbox_network`** is false.<br>
+            Landlock and seccomp are used as backstops when available (see **`sandbox_landlock`** and **`sandbox_seccomp`**).<br>
+            `auto` uses the sandbox when the host supports it and prints a warning when it does not.<br>
+            A true value (`1`, `yes`, `required`, ...) requires the sandbox:
+            autotest refuses to run if it is not available - use this in marking wrappers.<br>
+            A false value (`0`, `no`, `off`, ...) disables the sandbox:
+            programs then run with all the privileges of the user running autotest.<br>
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
+        """,
+    ),
+    Parameter(
+        "sandbox_support_commands",
+        default=True,
+        description="""
+            If true, **`compile_commands`**, **`checkers`**, **`pre_compile_command`**, **`setup_command`**
+            and **`postprocess_output_command`** are also run inside the sandbox.<br>
+            If false, only the test **`command`** is sandboxed.
         """,
     ),
     Parameter(
         "sandbox_network",
         default=True,
         description="""
-           If running in a **`sandbox`**, sandbox network.
+            If true, programs run in the **`sandbox`** have no network access:
+            they are given a private network namespace with only a loopback interface.<br>
+            Set to false to allow tests to use the network.<br>
+            Only one value is used for all tests.  This parameter must be set as
+            a global parameter: a value on a test line is ignored.
+
+            An exercise whose tests fetch a URL, or whose **`setup_command`** or
+            **`pre_compile_command`** installs packages, needs `sandbox_network=False`.
+            Without it those tests fail, or cannot be run, with no indication that the
+            network was the reason.  Everything else the sandbox provides is kept:
+            system directories stay read-only, the invoking user's files stay
+            unreachable, and tests still cannot see each other.
+
+            A test that depends on a service outside the machine is not reproducible:
+            it fails when the service changes, is unreachable, or is slow, and it fails
+            for every student at once.  Prefer supplying the data as a file where the
+            exercise allows it.
         """,
     ),
     Parameter(
-        "sandbox_read_only_mount",
-        default=[],
+        "sandbox_tmp_bytes",
+        default=268435456,
         description="""
-            Pathnames of files or directories mounted read-only in the sandbox
-            in addition to files or directories specified by **`sandbox_read_only_mount_base`**.
-            A tuple can be to specify a diferent mount point in the sandbox.
+            Size in bytes of the private `/tmp` seen by programs run in the **`sandbox`**.
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
         """,
     ),
     Parameter(
-        "sandbox_read_write_mount",
-        default=[],
+        "sandbox_shm_bytes",
+        default=67108864,
         description="""
-            Pathnames of files or directories visible mounted read-write in the sandbox
-            in addition to files or directories specified by **`sandbox_read_write_mount_base`**.
-            A tuple can be to specify a different mount point in the sandbox
-            `/tmp`, `/proc`, `/sys` and `/dev` are always mounted directly read-write in the sandbox
+            Size in bytes of the private `/dev/shm` seen by programs run in the **`sandbox`**.
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
+        """,
+    ),
+    Parameter(
+        "sandbox_seccomp",
+        default=True,
+        description="""
+            If true, a seccomp filter blocking dangerous system calls is applied to programs run in the **`sandbox`**,
+            when the kernel and architecture support it.<br>
+            The namespace boundary of the sandbox does not depend on this.
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
+        """,
+    ),
+    Parameter(
+        "sandbox_landlock",
+        default=True,
+        description="""
+            If true, Landlock rules restricting filesystem access are applied to programs run in the **`sandbox`**,
+            when the kernel supports them.<br>
+            The namespace boundary of the sandbox does not depend on this.
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
         """,
     ),
     Parameter(
@@ -1239,23 +1460,101 @@ PARAMETER_LIST += [
             "/lib32",
             "/lib64",
             "/libx32",
+            "/opt",
             "/sbin",
             "/usr",
         ],
         description="""
-            Pathnames of files or directories mounted read-only in the sandbox
-            The parameter **`sandbox_read_only_mount`** should be used to add extra pathnames.<bt>
-            This parameter need only be set to stop one of these pathnames being mounted.
+            Pathnames of files or directories made visible read-only in the **`sandbox`**.<br>
+            Pathnames which do not exist on the host are ignored.<br>
+            The parameter **`sandbox_read_only_mount`** should be used to add extra pathnames.<br>
+            This parameter need only be set to stop one of these pathnames being visible.
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
+        """,
+    ),
+    Parameter(
+        "sandbox_read_only_mount",
+        default=[],
+        description="""
+            Pathnames of files or directories made visible read-only in the **`sandbox`**
+            in addition to those specified by **`sandbox_read_only_mount_base`**.<br>
+            A `(host_pathname, sandbox_pathname)` tuple can be used to make a pathname visible at a different
+            location in the sandbox.
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
+        """,
+    ),
+    Parameter(
+        "sandbox_read_write_mount",
+        default=[],
+        description="""
+            Pathnames of files or directories made visible read-write in the **`sandbox`**.<br>
+            A `(host_pathname, sandbox_pathname)` tuple can be used to make a pathname visible at a different
+            location in the sandbox.<br>
+            The test directory is always read-write and `/tmp`, `/dev/shm`, `/dev` and `/proc` are always private
+            to the sandbox, so they do not need to be specified here.
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
         """,
     ),
     Parameter(
         "sandbox_command",
-        default=lambda parameters: [
-            u for u in UNSHARE_COMMAND if u != "--net" or parameters["sandbox_network"]
-        ],
+        default=None,
+        show_in_documentation=False,
         description="""
-           Command used to create sandbox
-           It is given two arguments: the full pathname of the autotest.py and '--inside_sandbox'
+            Deprecated: ignored
+        """,
+    ),
+    Parameter(
+        "stability_runs",
+        default=1,
+        finalize=finalize_stability_runs,
+        description="""
+            If greater than 1, each test is run this many times, each in a
+            fresh copy of the test directory, and any test which does not
+            reach the same result every time is reported as **`unstable`**
+            rather than passed or failed.<br>
+            The command-line option is **`--check_stability`**.<br>
+            This is a staff check for specifications, not something to leave
+            on: it multiplies the time a run takes.<br>
+            Two runs are compared on the verdict and on the explanation of a
+            failure, with hexadecimal constants removed, so an address printed
+            by dcc or valgrind does not make every test look unstable.  A
+            decimal value which varies between runs -- a pid, a timestamp, an
+            elapsed time -- in the output of a test which *fails* is part of
+            its explanation and will be reported.<br>
+            A test with **`shared_test_directory`** is not repeated: a second
+            run would see what the first left in that directory.
+        """,
+    ),
+    Parameter(
+        "parallel_tests",
+        default=1,
+        finalize=finalize_parallel_tests,
+        description="""
+            Number of tests executed concurrently.<br>
+            `0` means one test per CPU.<br>
+            Each test runs in its own copy of the test directory,
+            unless **`shared_test_directory`** is set.<br>
+            Output is printed in test order, regardless of the order in which tests finish.<br>
+            Only one value is used for all tests.  This parameter must be set as a global parameter.
+        """,
+    ),
+    Parameter(
+        "shared_test_directory",
+        default=False,
+        description="""
+            Run every test in one directory, instead of giving each test its own copy.
+
+            Tests then see files left behind by tests that ran before them, which is
+            how autotest behaved before per-test directories were introduced.
+            Set this for a test specification where one test prepares files that a
+            later test uses, for example where one test's **`setup_command`**
+            creates files that a test without a **`setup_command`** then reads.
+
+            Tests sharing a directory can not be run concurrently,
+            so **`parallel_tests`** is ignored and the tests are run one at a time.<br>
+            Set this as a global parameter.  A value on a single test line does
+            take effect for that test, but the run is not serialized for it, so
+            that test would run in the directory the other tests are copying.
         """,
     ),
 ]
@@ -1290,7 +1589,11 @@ NEGATED_PARAMETER_ALIASES = {
 }
 
 
-def normalize_parameters(parameters, check_required_parameters_set=True, debug=0):
+def normalize_parameters(
+    parameters,
+    check_required_parameters_set=True,
+    debug=0,  # noqa: ARG001 - accepted for its callers; no step prints
+):
     """
     check supplied parameters values appropriate
     and add default values for parameters which haven't been supplied
@@ -1300,9 +1603,7 @@ def normalize_parameters(parameters, check_required_parameters_set=True, debug=0
     )
     try:
         normalize_parameters1(
-            parameters,
-            check_required_parameters_set=check_required_parameters_set,
-            debug=debug,
+            parameters, check_required_parameters_set=check_required_parameters_set
         )
     except TestSpecificationError as e:
         raise TestSpecificationError(f"{error_prefix}: {e}") from e
@@ -1310,18 +1611,18 @@ def normalize_parameters(parameters, check_required_parameters_set=True, debug=0
         raise TestSpecificationError(f"{error_prefix}: {e}") from e
 
 
-def normalize_parameters1(parameters, check_required_parameters_set=True, debug=0):
-    set_parameter_aliases(parameters, debug=debug)
+def normalize_parameters1(parameters, check_required_parameters_set=True):
+    set_parameter_aliases(parameters)
     # this allows these to be used in calculated default values or finalize
-    coerce_parameter_types(parameters, debug=debug)
-    set_parameter_constant_defaults(parameters, debug=debug)
-    set_parameter_calculated_defaults(parameters, debug=debug)
-    finalize_parameters(parameters, debug=debug)
+    coerce_parameter_types(parameters)
+    set_parameter_constant_defaults(parameters)
+    set_parameter_calculated_defaults(parameters)
+    finalize_parameters(parameters)
     if check_required_parameters_set:
-        check_parameters_set(parameters, debug=debug)
+        check_parameters_set(parameters)
 
 
-def set_parameter_aliases(parameters, debug=0):
+def set_parameter_aliases(parameters):
     """
     set any any parameters which have non-calculated default values
     """
@@ -1331,10 +1632,10 @@ def set_parameter_aliases(parameters, debug=0):
             parameters[alias] = value
         negated_alias = NEGATED_PARAMETER_ALIASES.get(parameter, "")
         if negated_alias:
-            parameters[negated_alias] = not value
+            parameters[negated_alias] = not value_to_bool(value)
 
 
-def set_parameter_constant_defaults(parameters, debug=0):
+def set_parameter_constant_defaults(parameters):
     for p in PARAMETERS.values():
         if (
             p.name not in parameters
@@ -1344,7 +1645,7 @@ def set_parameter_constant_defaults(parameters, debug=0):
             parameters[p.name] = copy.deepcopy(p.default)
 
 
-def set_parameter_calculated_defaults(parameters, debug=0):
+def set_parameter_calculated_defaults(parameters):
     for p in PARAMETERS.values():
         if p.name not in parameters:
             default = p.get_default(parameters)
@@ -1352,15 +1653,15 @@ def set_parameter_calculated_defaults(parameters, debug=0):
                 parameters[p.name] = default
 
 
-def coerce_parameter_types(parameters, debug=0):
+def coerce_parameter_types(parameters):
     for p in PARAMETERS.values():
         if p.name in parameters:
             value = parameters[p.name]
             if p.required_type is not None and not isinstance(value, p.required_type):
                 try:
-                    if p.required_type == list:
+                    if p.required_type is list:
                         new_value = [value]
-                    elif p.required_type == bool:
+                    elif p.required_type is bool:
                         new_value = value_to_bool(value)
                     else:
                         new_value = p.required_type(value)
@@ -1372,10 +1673,24 @@ def coerce_parameter_types(parameters, debug=0):
 
 
 def value_to_bool(value):
-    return bool((value[0:1] not in "0fF") if isinstance(value, str) else value)
+    """
+    Interpret a parameter value as a boolean.
+
+    Values in tests.txt and on the command line (-P) usually arrive as strings,
+    so the words a person would naturally write for false must be false:
+    "", "0", "false", "no", "n", "off" (any case, and any string starting with
+    "0", "f" or "n" such as "False", "None" or "nope").
+    Everything else is true.  Non-strings use Python's own truth value.
+    """
+    if not isinstance(value, str):
+        return bool(value)
+    lowered = value.lower()
+    if not lowered or lowered == "off":
+        return False
+    return lowered[0] not in "0fn"
 
 
-def finalize_parameters(parameters, debug=0):
+def finalize_parameters(parameters):
     for p in PARAMETERS.values():
         if p.finalize:
             value = p.finalize(p.name, parameters.get(p.name, None), parameters)
@@ -1383,7 +1698,7 @@ def finalize_parameters(parameters, debug=0):
                 parameters[p.name] = value
 
 
-def check_parameters_set(parameters, debug=0):
+def check_parameters_set(parameters):
     for p in PARAMETERS.values():
         if p.must_be_set and not parameters[p.name]:
             raise TestSpecificationError(f"required parameter '{p.name}' not specified")

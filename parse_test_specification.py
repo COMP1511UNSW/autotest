@@ -2,21 +2,29 @@
 
 # parse a "tests.txt" file specifying an autotest
 
-import ast, io, collections, copy, os, pprint, re, sys, tokenize
+import ast
+import collections
+import copy
+import io
+import os
+import pprint
+import re
+import sys
+import tokenize
+from typing import Any
+
 from parameter_descriptions import check_valid_parameter_name, normalize_parameters
 from util import TestSpecificationError
 
-IGNORE_TOKENS = set(
-    [
-        tokenize.COMMENT,
-        tokenize.DEDENT,
-        tokenize.ENCODING,
-        tokenize.ENDMARKER,
-        tokenize.INDENT,
-        tokenize.NEWLINE,
-        tokenize.NL,
-    ]
-)
+IGNORE_TOKENS = {
+    tokenize.COMMENT,
+    tokenize.DEDENT,
+    tokenize.ENCODING,
+    tokenize.ENDMARKER,
+    tokenize.INDENT,
+    tokenize.NEWLINE,
+    tokenize.NL,
+}
 
 ASSIGNMENT = None
 
@@ -26,40 +34,56 @@ FSTRING_START = getattr(tokenize, "FSTRING_START", None)
 FSTRING_END = getattr(tokenize, "FSTRING_END", None)
 
 
-def merge_fstring_tokens(tokens):
+def merge_fstring_tokens(tokens, source):
     """
     Python 3.12+ tokenizers (PEP 701) split f-strings into FSTRING_START,
     FSTRING_MIDDLE and expression tokens, closed by FSTRING_END (possibly
     nested). Before 3.12 an f-string was a single STRING token, which is what
-    this parser (and get_token_characters()'s eval()) expects. Token text in a
-    run is contiguous source text, so concatenating the raw token strings
-    reconstructs the original f-string exactly.
+    this parser (and get_token_characters()'s eval()) expects.
+
+    The merged token's text is cut out of source (the text the tokens were
+    read from) by position, not concatenated from the token strings: an
+    FSTRING_MIDDLE holds an escaped "{{" as "{", and the whitespace between
+    the tokens of an expression is in no token at all, so concatenation
+    changes what the f-string means.
     """
-    run = None
-    start = end = None
+    lines = io.StringIO(source).readlines()
+    in_fstring = False
+    start = (0, 0)
     depth = 0
     for token in tokens:
-        if run is None:
+        if not in_fstring:
             if FSTRING_START is not None and token.type == FSTRING_START:
-                run = [token.string]
+                in_fstring = True
                 start = token.start
-                end = token.end
             else:
                 yield token
-        else:
-            run.append(token.string)
-            end = token.end
-            if token.type == FSTRING_START:
-                depth += 1
-            elif token.type == FSTRING_END:
-                if depth == 0:
-                    yield tokenize.TokenInfo(
-                        tokenize.STRING, "".join(run), start, end, None
-                    )
-                    run = None
-                    depth = 0
-                else:
-                    depth -= 1
+        elif token.type == FSTRING_START:
+            depth += 1
+        elif token.type == FSTRING_END:
+            if depth == 0:
+                yield tokenize.TokenInfo(
+                    tokenize.STRING,
+                    source_between(lines, start, token.end),
+                    start,
+                    token.end,
+                    token.line,
+                )
+                in_fstring = False
+            else:
+                depth -= 1
+
+
+def source_between(lines, start, end):
+    """the text from position start to end, (row, column) with rows from 1"""
+    (start_row, start_column), (end_row, end_column) = start, end
+    if start_row == end_row:
+        return lines[start_row - 1][start_column:end_column]
+    return (
+        lines[start_row - 1][start_column:]
+        + "".join(lines[start_row : end_row - 1])
+        + lines[end_row - 1][:end_column]
+    )
 
 
 def parse_file(
@@ -81,7 +105,7 @@ def parse_file(
         initial_parameters["supplied_files_directory"] = (
             os.path.dirname(pathname) or "."
         )
-    with open(pathname, "r", encoding="utf-8") as f:
+    with open(pathname, encoding="utf-8") as f:
         return parse_stream(
             f,
             pathname,
@@ -126,7 +150,7 @@ def parse_stream(
     """
     tests = collections.OrderedDict(initial_tests or {})
     global_parameters = dict(initial_parameters or {})
-    test_local_parameters = collections.defaultdict(set)
+    test_local_parameters: dict[str, set[str]] = collections.defaultdict(set)
     for line_number, values, _source_lines in get_line_literals(
         stream, source_name, global_parameters, debug=debug
     ):
@@ -166,15 +190,11 @@ def parse_stream(
 
 
 def print_tests(tests):
-    # 	last_parameters = {}
     for label, parameters in tests.items():
         print("***", label, end=" = ")
-        p = dict(
-            (k, v)
-            for (k, v) in parameters.items()
-            if k != "__environment_original" and v
-        )
-        # 		p = dict((k,v) for (k,v) in parameters.items() if v != last_parameters.get(v, None) and)
+        p = {
+            k: v for (k, v) in parameters.items() if k != "__environment_original" and v
+        }
         pprint.pprint(p)
 
 
@@ -223,7 +243,9 @@ def process_line(
     return local_parameters
 
 
-def parse_line_assignments(values, debug=0):
+def parse_line_assignments(  # noqa: C901, PLR0912 - a hand-written parser: one branch per token
+    values, debug=0
+):
     """
     return a dict containing the parameters specified by values
     a singleton value is converted to a value for the parameter 'label'
@@ -335,17 +357,19 @@ def get_line_literals(stream, source_name, parameters, debug=0):
         )
 
 
-def parse_literals(combined_lines, parameters, debug=0):
+def parse_literals(  # noqa: C901, PLR0912 - a hand-written parser: one branch per literal
+    combined_lines, parameters, debug=0
+):
     """
     parse 1 or more lines into literals
     """
     if debug > 3:
-        print(f"parse_literals({repr(combined_lines)})")
+        print(f"parse_literals({combined_lines!r})")
     last_token = None
-    literals = []
+    literals: list[Any] = []
 
     for token in merge_fstring_tokens(
-        tokenize.generate_tokens(io.StringIO(combined_lines).readline)
+        tokenize.generate_tokens(io.StringIO(combined_lines).readline), combined_lines
     ):
         if debug > 3:
             print(f"token {token}")
@@ -354,7 +378,7 @@ def parse_literals(combined_lines, parameters, debug=0):
             # allow bare $ ! ` ? characters
             if len(token.string) == 1 and token.string in " \t":
                 continue
-            elif len(token.string) == 1 and token.string in "$!`?":
+            if len(token.string) == 1 and token.string in "$!`?":
                 token = FakeToken(token)
             else:
                 raise TestSpecificationError(
@@ -382,18 +406,18 @@ def parse_literals(combined_lines, parameters, debug=0):
             and not last_token
         ):
             closing_ch = "]" if token.string == "[" else "}"
-            (start_line, start_ch) = token.start
+            start_line, start_ch = token.start
             remaining_lines = "\n".join(combined_lines.splitlines()[start_line - 1 :])[
                 start_ch:
             ]
             if debug > 3:
-                print(f"list/dict parsing remaining_lines={repr(remaining_lines)}")
+                print(f"list/dict parsing remaining_lines={remaining_lines!r}")
                 print(token)
             for end in range(len(remaining_lines)):
                 if remaining_lines[end] == closing_ch:
                     try:
                         if debug > 3:
-                            print(f"eval({repr(remaining_lines[:end+1])})")
+                            print(f"eval({remaining_lines[:end+1]!r})")
                         literal = ast.literal_eval(remaining_lines[: end + 1])
                         # break up remainder of string into literals
                         return (
@@ -441,12 +465,17 @@ def stringize(x):
 def get_token_characters(token, parameters=None):
     """return characters of token"""
     if token.type == tokenize.STRING:
-        if token.string[0] == "f":
-            return eval(token.string, globals(), parameters or {})
-        else:
-            return ast.literal_eval(token.string)
-    else:
-        return token.string
+        # the prefix letters before the quote: f, F, rf, Rf, fr, ...
+        prefix = token.string[
+            : len(token.string) - len(token.string.lstrip("rRfFbBuU"))
+        ]
+        if "f" in prefix.lower():
+            # specifications are trusted (README "Security model")
+            return eval(  # noqa: S307  # nosec B307
+                token.string, globals(), parameters or {}
+            )
+        return ast.literal_eval(token.string)
+    return token.string
 
 
 class FakeToken:
@@ -486,7 +515,7 @@ def output_file_without_parameters(
     """
     if remove_parameters is None:
         remove_parameters = ["expected_stdout", "expected_stderr"]
-    with open(pathname, "r", encoding="utf-8") as f:
+    with open(pathname, encoding="utf-8") as f:
         return output_stream_without_parameters(
             f,
             pathname,
@@ -512,7 +541,7 @@ def output_stream_without_parameters(
     """
     tests = collections.OrderedDict(initial_tests or {})
     global_parameters = dict(initial_parameters or {})
-    test_local_parameters = collections.defaultdict(set)
+    test_local_parameters: dict[str, set[str]] = collections.defaultdict(set)
     for line_number, values, source_lines in get_line_literals(
         stream, source_name, global_parameters, debug=debug
     ):
@@ -545,7 +574,7 @@ def output_lines_without_parameters(source_lines, parameters, remove_parameters,
     if "label" not in parameters:
         for k, v in parameters.items():
             if k not in remove_parameters:
-                print(f"{k}={repr(v)}", file=file)
+                print(f"{k}={v!r}", file=file)
         return
 
     # don't print a bare label
@@ -557,7 +586,7 @@ def output_lines_without_parameters(source_lines, parameters, remove_parameters,
     print(parameters["label"], end="", file=file)
     for k, v in parameters.items():
         if k not in remove_parameters and k != "label":
-            print(f" {k}={repr(v)}", end="", file=file)
+            print(f" {k}={v!r}", end="", file=file)
     print(file=file)
 
 

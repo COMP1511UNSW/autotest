@@ -1,0 +1,10 @@
+# Activities whose output legitimately varies between two runs of the SAME
+# tree, so a replay can not hold them to producing identical output.  Each was
+# confirmed by running it twice, serially, against itself.
+#
+# Pass this file to scripts/replay_activities.sh as REPLAY_KNOWN_UNSTABLE.
+# Add to it only after demonstrating that an activity differs from itself.
+#
+# COMP1521 26T2:
+dining_philosophers
+24t1final_q7

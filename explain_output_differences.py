@@ -8,11 +8,12 @@ Todo:
 """
 
 import difflib
-from termcolor import colored as termcolor_colored
 from collections import defaultdict
 
+from termcolor import colored as termcolor_colored
 
-def explain_output_differences(
+
+def explain_output_differences(  # noqa: C901, PLR0911, PLR0912, PLR0915 - one early return per kind of difference a novice is shown
     name,
     expected,
     canonical_expected,
@@ -32,7 +33,9 @@ def explain_output_differences(
     max_lines_shown = int(max_lines_shown)
     max_line_length_shown = int(max_line_length_shown)
     colored = (
-        termcolor_colored if parameters["colorize_output"] else lambda x, *a, **kw: x
+        termcolor_colored
+        if parameters["colorize_output"]
+        else lambda x, *_args, **_kwargs: x
     )
 
     if canonical_expected and not actual:
@@ -80,13 +83,13 @@ def explain_output_differences(
     ):
         extra_char = colored(repr(canonical_actual[-1]), "red")
         suffix = ""
-        if "\ufffd" == canonical_actual[-1]:
+        if canonical_actual[-1] == "\ufffd":
             extra_char = colored("'\\xff'", "red")
             suffix = (
                 "This can result from printing the EOF value returned by getchar.\n"
             )
         return f"Your program's {name} was correct except it had an extra {extra_char} character on the end.\n{suffix}"
-    actual_line_color = defaultdict(lambda: "green")
+    actual_line_color: dict[int, str] = defaultdict(lambda: "green")
     explanation = ""
     actual_lines = actual.splitlines()
     n_actual_lines = len(actual_lines)
@@ -206,10 +209,7 @@ def explain_output_differences(
             actual_char = actual_not_expected.pop()
             if canonical_actual.replace(actual_char, "") == canonical_expected:
                 n = canonical_actual.count(actual_char)
-                if n == 1:
-                    format_str = "a '%s' character."
-                else:
-                    format_str = "all '%s' characters."
+                format_str = "a '%s' character." if n == 1 else "all '%s' characters."
                 explanation += f"Your program's {name} would be correct if you removed "
                 explanation += format_str % (colored(actual_char, "red"))
                 explanation += "\n"
@@ -222,7 +222,7 @@ def explain_output_differences(
     return explanation
 
 
-def create_diff(
+def create_diff(  # noqa: C901, PLR0912, PLR0915 - the diff a novice reads, built case by case
     canonical_actual_lines,
     canonical_expected_lines,
     actual_lines,
@@ -304,8 +304,10 @@ def create_diff(
     actual_line_number = 0
     diff = difflib.ndiff(canonical_actual_lines, canonical_expected_lines)
     diff_explanation = [
-        f"The difference between your {name}({colored('-', 'red')})"
-        + f" and the correct {name}({colored('+', 'green')}) is:"
+        (
+            f"The difference between your {name}({colored('-', 'red')})"
+            f" and the correct {name}({colored('+', 'green')}) is:"
+        )
     ]
     if prefix_removed:
         diff_explanation.append("...")
@@ -346,12 +348,11 @@ def create_diff(
                         == expected_lines[expected_line_number - 1]
                     ):
                         diff_explanation.append(diff_line)
-                elif last_d == "-":
-                    if (
-                        canonical_actual_lines[actual_line_number - 1]
-                        == actual_lines[actual_line_number - 1]
-                    ):
-                        diff_explanation.append(diff_line)
+                elif last_d == "-" and (
+                    canonical_actual_lines[actual_line_number - 1]
+                    == actual_lines[actual_line_number - 1]
+                ):
+                    diff_explanation.append(diff_line)
             elif d == " ":
                 context_line = "  " + actual_lines[actual_line_number]
                 if last_line_in_diff:
@@ -380,15 +381,14 @@ def create_diff(
     return diff_explanation
 
 
-def sanitize_string(
+def sanitize_string(  # noqa: C901 - one branch per class of character
     unsanitized_string,
     leave_tabs=False,
     leave_colorization=False,
     max_lines_shown=32,
     show_all_lines=False,
     max_line_length_shown=1024,
-    # pylint: disable=dangerous-default-value
-    line_color=defaultdict(lambda: ""),
+    line_color=defaultdict(lambda: ""),  # noqa: B006 - only ever read
     **parameters,
 ):
     max_lines_shown = int(max_lines_shown)
