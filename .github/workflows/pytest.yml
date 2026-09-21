@@ -80,8 +80,9 @@ jobs:
           # against main must run rather than skip
           AUTOTEST_REQUIRE_MAIN_COMPARISON: "1"
         run: |
+          VENV_BIN="$(pipenv --venv)/bin"
           if [ "${{matrix.python-version}}" = "3.11" ]; then
-            pipenv run make coverage
+            pipenv run make VENV_BIN="$VENV_BIN" coverage
           else
-            pipenv run make test
+            pipenv run make VENV_BIN="$VENV_BIN" test
           fi
