@@ -470,6 +470,35 @@ def test_a_supplied_file_still_replaces_a_read_only_submitted_file(tmp_path):
     assert submitted.read_text() == "staff\n"
 
 
+def test_a_supplied_directory_replaces_a_submitted_symlink_to_a_directory(tmp_path):
+    """
+    A submitted symlink must not redirect staff files outside the working tree.
+
+    The working tree belongs to the submission, so an entry there can be a
+    symlink to any directory writable by the invoking account.  Recurse into a
+    real directory only; replace symlinks before copying the supplied tree.
+    """
+    supplied = tmp_path / "supplied"
+    (supplied / "checker").mkdir(parents=True)
+    (supplied / "checker" / "tests.txt").write_text("staff\n")
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "existing.txt").write_text("keep\n")
+
+    working = tmp_path / "working"
+    working.mkdir()
+    (working / "checker").symlink_to(outside, target_is_directory=True)
+
+    temp_directories.copy_directory(str(supplied), str(working))
+
+    assert (working / "checker").is_dir()
+    assert not os.path.islink(working / "checker")
+    assert (working / "checker" / "tests.txt").read_text() == "staff\n"
+    assert not (outside / "tests.txt").exists()
+    assert (outside / "existing.txt").read_text() == "keep\n"
+
+
 def test_a_specification_is_not_copied_into_the_test_directory(
     tmp_path, make_exercise, run_autotest
 ):

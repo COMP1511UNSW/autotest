@@ -15,10 +15,14 @@ jobs:
 
   # actual auto pytest
   main_job:
-    name: pytest
+    name: pytest (py${{ matrix.python-version }})
     needs: pre_job
     if: ${{needs.pre_job.outputs.should_skip != 'true'}}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11"]
     steps:
       - uses: actions/checkout@v4
         if: github.event_name == 'pull_request'
@@ -33,7 +37,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{matrix.python-version}}
           architecture: x64
 
       - name: Install pipenv
@@ -44,7 +48,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.local/share/virtualenvs
-          key: ${{runner.os}}-py3.11-pipenv-${{hashFiles('**/Pipfile.lock')}}
+          key: ${{runner.os}}-py${{matrix.python-version}}-pipenv-${{hashFiles('**/Pipfile.lock')}}
 
       - name: Install dependencies
         if: steps.cache-pipenv.outputs.cache-hit != 'true'
@@ -65,7 +69,7 @@ jobs:
         run: |
           pipenv run python -c 'import sandbox, sys; r = sandbox.probe(sandbox.config_from_parameters({})); sys.exit(0 if r is None else f"no sandbox on this runner: {r}")'
 
-      - name: Run test suite with the coverage gate (see pyproject.toml)
+      - name: Run test suite
         env:
           # tests/environment expects it when autotest is run on that fixture
           SAMPLE_ENVIRONMENT_VARIABLE: sample_value
@@ -73,4 +77,8 @@ jobs:
           # against main must run rather than skip
           AUTOTEST_REQUIRE_MAIN_COMPARISON: "1"
         run: |
-          pipenv run make coverage
+          if [ "${{matrix.python-version}}" = "3.11" ]; then
+            pipenv run make coverage
+          else
+            pipenv run make test
+          fi

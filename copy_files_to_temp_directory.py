@@ -213,7 +213,9 @@ def copy_directory(src, dst, symlinks=False, ignore=None):
     names = os.listdir(src)
     ignored_names = ignore(src, names) if ignore is not None else set()
 
-    if not (os.path.exists(dst) and os.path.isdir(dst)):
+    if os.path.lexists(dst) and (os.path.islink(dst) or not os.path.isdir(dst)):
+        remove_existing(dst)
+    if not os.path.isdir(dst):
         os.makedirs(dst)
         # we don't want to copy directory permission if the directory exists already
         try:
@@ -229,7 +231,9 @@ def copy_directory(src, dst, symlinks=False, ignore=None):
             if symlinks and os.path.islink(srcname):
                 copy_into_place(srcname, dstname, as_symlink=True)
             elif os.path.isdir(srcname):
-                if os.path.lexists(dstname) and not os.path.isdir(dstname):
+                if os.path.lexists(dstname) and (
+                    os.path.islink(dstname) or not os.path.isdir(dstname)
+                ):
                     remove_existing(dstname)
                 copy_directory(srcname, dstname, symlinks, ignore)
             else:
