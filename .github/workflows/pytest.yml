@@ -1,5 +1,8 @@
 name: auto-pytest
 on: [push, pull_request]
+permissions:
+  actions: write
+  contents: read
 jobs:
   # job skipper in the case of concurrent push + pull_request trigger
   pre_job:
