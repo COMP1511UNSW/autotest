@@ -11,7 +11,7 @@
 VENV_BIN ?=
 BIN := $(if $(VENV_BIN),$(VENV_BIN)/,)
 PYTHON ?= $(if $(VENV_BIN),$(VENV_BIN)/python,python3)
-PYTEST := $(PYTHON) -m pytest
+PYTEST := $(BIN)pytest
 RUFF := $(BIN)ruff
 BLACK := $(BIN)black
 MYPY := $(BIN)mypy
